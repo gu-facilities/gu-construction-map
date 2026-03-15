@@ -1044,4 +1044,14 @@ buildTimeline();
     projects = loaded.map(p => ({
       ...p,
       start: p.start ? String(p.start).slice(0,10) : p.start,
-      end:   p.end   ? St
+      end:   p.end   ? String(p.end).slice(0,10)   : p.end,
+    }));
+    showHint('Projects loaded ✓',2000);
+  } else {
+    showHint('Could not load from sheet — showing sample data',4000);
+  }
+  refreshMap();renderSidebar();buildMiniLegend();updateStats();
+})();
+</script>
+</body>
+</html>
