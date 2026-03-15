@@ -8,7 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="config.js"></script>
 <style>
 :root{--navy:#041E42;--navy2:#071d3b;--navy3:#03111f;--gold:#C9A96E;--cream:#F5EFE0;--gray:#8a96a3;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -387,43 +386,18 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 const PHASES={charter:{label:'Charter',color:'#534AB7'},design:{label:'Design',color:'#1D9E75'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// ── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────
-// Replace this URL with your deployed Apps Script Web App URL
-const SHEET_API = window.SHEET_API_URL || '';
-
-// ── API HELPERS ───────────────────────────────────────────────────────
-async function apiGet() {
-  if (!SHEET_API) return null;
-  try {
-    const r = await fetch(SHEET_API);
-    const d = await r.json();
-    return d.projects || null;
-  } catch(e) { console.warn('API load failed:', e); return null; }
-}
-async function apiPost(body) {
-  if (!SHEET_API) return null;
-  try {
-    const r = await fetch(SHEET_API, {
-      method:'POST', body:JSON.stringify(body),
-      headers:{'Content-Type':'application/json'}
-    });
-    return await r.json();
-  } catch(e) { console.warn('API post failed:', e); return null; }
-}
-
-// ── PROJECT DATA (starts as sample data, replaced by sheet on load) ──
 let projects=[
-  {id:'p_1',name:'Lauinger Library Renovation',type:'Renovation',phase:'construction',start:'2025-08-01',end:'2026-06-30',desc:'Structural and interior updates.',shapes:[{type:'pin',lat:38.9076,lng:-77.0737}]},
-  {id:'p_2',name:'Healy Hall Restoration',type:'Renovation',phase:'design',start:'2025-11-01',end:'2027-03-31',desc:'Facade restoration.',shapes:[{type:'pin',lat:38.9072,lng:-77.0724}]},
-  {id:'p_3',name:'SW Quadrangle Infrastructure',type:'Infrastructure',phase:'pre',start:'2026-02-01',end:'2026-12-31',desc:'Underground utility improvements.',shapes:[{type:'pin',lat:38.9055,lng:-77.0748}]},
-  {id:'p_4',name:'Regents Hall HVAC',type:'Maintenance & Repair',phase:'closeout',start:'2025-06-01',end:'2026-01-31',desc:'Full HVAC replacement.',shapes:[{type:'pin',lat:38.9068,lng:-77.0741}]},
-  {id:'p_5',name:'Canal Road Entrance',type:'Infrastructure',phase:'charter',start:'2026-06-01',end:'2027-08-31',desc:'Entrance redesign.',shapes:[{type:'pin',lat:38.9022,lng:-77.0762}]},
-  {id:'p_6',name:'MedStar Expansion Wing',type:'New Construction (Building, Structure, etc.)',phase:'construction',start:'2025-05-01',end:'2027-12-31',desc:'New patient care wing.',shapes:[{type:'pin',lat:38.9109,lng:-77.0764}]},
-  {id:'p_7',name:'Shaw Field Staging Area',type:'Landscape',phase:'construction',start:'2026-01-01',end:'2026-09-30',desc:'Temporary staging area.',shapes:[{type:'pin',lat:38.9081,lng:-77.0762,isStagingArea:true}]},
-  {id:'p_8',name:'Old North Streetscape',type:'Landscape',phase:'design',start:'2026-03-01',end:'2026-11-30',desc:'Pedestrian pathway improvements.',shapes:[{type:'pin',lat:38.9067,lng:-77.0718}]},
-  {id:'p_9',name:'Tondorf Road Closure',type:'Infrastructure',phase:'pre',start:'2026-04-01',end:'2026-07-31',desc:'Temporary road closure.',shapes:[{type:'pin',lat:38.9060,lng:-77.0740,isRoadClosure:true}]},
+  {id:1,name:'Lauinger Library Renovation',type:'Renovation',phase:'construction',start:'2025-08-01',end:'2026-06-30',desc:'Structural and interior updates.',shapes:[{type:'pin',lat:38.9076,lng:-77.0737}]},
+  {id:2,name:'Healy Hall Restoration',type:'Renovation',phase:'design',start:'2025-11-01',end:'2027-03-31',desc:'Facade restoration.',shapes:[{type:'pin',lat:38.9072,lng:-77.0724}]},
+  {id:3,name:'SW Quadrangle Infrastructure',type:'Infrastructure',phase:'pre',start:'2026-02-01',end:'2026-12-31',desc:'Underground utility improvements.',shapes:[{type:'pin',lat:38.9055,lng:-77.0748}]},
+  {id:4,name:'Regents Hall HVAC',type:'Maintenance & Repair',phase:'closeout',start:'2025-06-01',end:'2026-01-31',desc:'Full HVAC replacement.',shapes:[{type:'pin',lat:38.9068,lng:-77.0741}]},
+  {id:5,name:'Canal Road Entrance',type:'Infrastructure',phase:'charter',start:'2026-06-01',end:'2027-08-31',desc:'Entrance redesign.',shapes:[{type:'pin',lat:38.9022,lng:-77.0762}]},
+  {id:6,name:'MedStar Expansion Wing',type:'New Construction (Building, Structure, etc.)',phase:'construction',start:'2025-05-01',end:'2027-12-31',desc:'New patient care wing.',shapes:[{type:'pin',lat:38.9109,lng:-77.0764}]},
+  {id:7,name:'Shaw Field Staging Area',type:'Landscape',phase:'construction',start:'2026-01-01',end:'2026-09-30',desc:'Temporary staging area.',shapes:[{type:'pin',lat:38.9081,lng:-77.0762,isStagingArea:true}]},
+  {id:8,name:'Old North Streetscape',type:'Landscape',phase:'design',start:'2026-03-01',end:'2026-11-30',desc:'Pedestrian pathway improvements.',shapes:[{type:'pin',lat:38.9067,lng:-77.0718}]},
+  {id:9,name:'Tondorf Road Closure',type:'Infrastructure',phase:'pre',start:'2026-04-01',end:'2026-07-31',desc:'Temporary road closure.',shapes:[{type:'pin',lat:38.9060,lng:-77.0740,isRoadClosure:true}]},
 ];
-// IDs are now assigned by the Apps Script backend
+let nextId=10;
 
 // State
 let tool='pan',currentPhase='construction';
@@ -799,20 +773,9 @@ function saveProject(){
   if(!wizExtentShapes.length){alert('Please mark at least one project extent (pin or area) on the map.');return;}
   const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
   const p={id:nextId++,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
-  // Optimistically add to local list
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
-  showHint(`✓ "${p.name}" saving…`,1500);
-  // Persist to Google Sheet
-  apiPost({action:'create', project:{...p, stagingYN:!!p.shapes.some(s=>s.isStagingArea), roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
-    if(res&&res.id){
-      // Update local id to server-assigned id
-      const idx=projects.indexOf(p);
-      if(idx>=0) projects[idx].id=res.id;
-      renderSidebar();
-      showHint(`✓ "${p.name}" saved`,2500);
-    }
-  });
+  showHint(`✓ "${p.name}" saved`,3000);
 }
 
 // ── EDIT EXTENTS ────────────────────────────────────────────────────
@@ -905,25 +868,12 @@ document.addEventListener('click',()=>ctxMenu.style.display='none');
 function showContextMenu(e,id){e.preventDefault();e.stopPropagation();contextProjectId=id;ctxMenu.style.display='block';ctxMenu.style.left=e.clientX+'px';ctxMenu.style.top=e.clientY+'px';}
 function confirmRemoveProject(){ctxMenu.style.display='none';document.getElementById('confirmOverlay').classList.add('show');}
 function closeConfirm(){document.getElementById('confirmOverlay').classList.remove('show');}
-function doRemoveProject(){
-  const id=contextProjectId;
-  projects=projects.filter(p=>p.id!==id);
-  closeConfirm();refreshMap();renderSidebar();updateStats();buildMiniLegend();
-  apiPost({action:'delete',id}).then(res=>{
-    if(res&&!res.success) showHint('⚠ Delete may not have saved to sheet',3000);
-  });
-}
+function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(contextProjectId));closeConfirm();refreshMap();renderSidebar();updateStats();buildMiniLegend();apiPost({action:'delete',id:contextProjectId});}
 
 // ── TOGGLE FILTERS ──────────────────────────────────────────────────
 function toggleStage(el){const s=el.dataset.stage;if(visibleStages.has(s)){visibleStages.delete(s);el.classList.remove('on');}else{visibleStages.add(s);el.classList.add('on');}refreshMap();updateStats();renderSidebar();buildMiniLegend();}
 function toggleType(el){const t=el.dataset.type;if(visibleTypes.has(t)){visibleTypes.delete(t);el.classList.remove('on');}else{visibleTypes.add(t);el.classList.add('on');}refreshMap();updateStats();renderSidebar();}
-function changePhase(id,v){
-  const p=projects.find(x=>x.id===id);
-  if(!p)return;
-  p.phase=v;
-  refreshMap();renderSidebar();updateStats();buildMiniLegend();
-  apiPost({action:'update',project:{...p}});
-}
+function changePhase(id,v){const p=projects.find(x=>x.id===id);if(p){p.phase=v;refreshMap();renderSidebar();updateStats();buildMiniLegend();}}
 function focusProject(id){const p=projects.find(x=>x.id===id);if(!p)return;const pin=p.shapes.find(s=>s.type==='pin');if(pin)map.flyTo([pin.lat,pin.lng],18,{duration:.7});else if(p.shapes[0]?.latlngs){const b=L.latLngBounds(p.shapes[0].latlngs);map.flyToBounds(b,{padding:[40,40],duration:.7});}}
 
 // ── TIMELINE ────────────────────────────────────────────────────────
@@ -1025,36 +975,8 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 // ── INIT ────────────────────────────────────────────────────────────
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 buildTimeline();
-
-// Load projects from Google Sheets (replaces sample data if API is configured)
-(async()=>{
-  if(!SHEET_API){
-    // No API configured — show setup banner
-    const banner=document.getElementById('setupBanner');
-    if(banner) banner.style.display='flex';
-    refreshMap();renderSidebar();buildMiniLegend();updateStats();
-    showHint('Drag to pan · Scroll to zoom · Click a dot to inspect');
-    return;
-  }
-  showHint('Loading projects…',0);
-  const loaded=await apiGet();
-  if(loaded){
-    projects=loaded;
-    showHint('Projects loaded ✓',2000);
-  } else {
-    showHint('Could not load from sheet — showing sample data',4000);
-  }
-  refreshMap();renderSidebar();buildMiniLegend();updateStats();
-})();
+refreshMap();renderSidebar();buildMiniLegend();updateStats();
+showHint('Drag to pan · Scroll to zoom · Click a dot to inspect');
 </script>
-
-<!-- SETUP BANNER (shown when SHEET_API not configured) -->
-<div id="setupBanner" style="display:none;position:fixed;top:54px;left:50%;transform:translateX(-50%);
-  background:#BA7517;color:#fff;font-size:.72rem;font-weight:600;padding:7px 18px;border-radius:0 0 8px 8px;
-  z-index:2000;align-items:center;gap:10px;box-shadow:0 3px 12px rgba(0,0,0,.25);">
-  ⚙️ Google Sheets not connected — projects won't save between sessions.
-  <a href="SETUP.md" target="_blank" style="color:#fff;text-decoration:underline;">Setup guide</a>
-</div>
-
 </body>
 </html>
