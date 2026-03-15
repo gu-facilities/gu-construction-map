@@ -140,7 +140,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill{padding:2px 9px;border-radius:10px;font-size:.61rem;font-weight:700;cursor:pointer;opacity:.38;transition:opacity .15s,transform .1s;color:#fff;user-select:none;}
 .spill.on{opacity:1;}
 .spill:hover{transform:scale(1.04);}
-.map-wrap{flex:1;position:relative;overflow:hidden;min-height:200px;}
+.map-wrap{flex:1;position:relative;overflow:hidden;}
 #map{position:absolute;inset:0;}
 #drawCanvas{position:absolute;inset:0;z-index:450;pointer-events:none;}
 .proj-dot{width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;font-family:'Source Sans 3',sans-serif;}
@@ -383,27 +383,23 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </div>
 
 <script>
-// ── GOOGLE SHEETS API ────────────────────────────────────────────────
-const SHEET_API = window.SHEET_API_URL || 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
+// ── GOOGLE SHEETS ─────────────────────────────────────────────────────
+const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 
 async function apiGet() {
-  if (!SHEET_API) return null;
   try {
     const r = await fetch(SHEET_API);
     const d = await r.json();
     return d.projects || null;
-  } catch(e) { console.warn('API load failed:', e); return null; }
+  } catch(e) { console.warn('Sheet load failed:', e); return null; }
 }
 
 async function apiPost(body) {
-  if (!SHEET_API) return null;
   try {
-    // Use GET with encoded payload to avoid CORS preflight issues with Apps Script
-    const encoded = encodeURIComponent(JSON.stringify(body));
-    const url = SHEET_API + '?payload=' + encoded;
+    const url = SHEET_API + '?payload=' + encodeURIComponent(JSON.stringify(body));
     const r = await fetch(url);
     return await r.json();
-  } catch(e) { console.warn('API post failed:', e); return null; }
+  } catch(e) { console.warn('Sheet save failed:', e); return null; }
 }
 
 const PHASES={charter:{label:'Charter',color:'#534AB7'},design:{label:'Design',color:'#1D9E75'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
@@ -448,8 +444,6 @@ const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/service
 const streets=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
 const map=L.map('map',{center:[38.9072,-77.0741],zoom:17,layers:[satellite],doubleClickZoom:false});
 map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
-// Force Leaflet to recalculate size after layout settles
-setTimeout(()=>{ map.invalidateSize(); }, 100);
 const markerGroup=L.layerGroup().addTo(map);
 const polygonGroup=L.layerGroup().addTo(map);
 
@@ -797,19 +791,18 @@ function saveProject(){
   if(!name){alert('Please enter a project name.');return;}
   if(!wizExtentShapes.length){alert('Please mark at least one project extent (pin or area) on the map.');return;}
   const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
-  const tempId = 'p_' + Date.now();
-  const p={id:tempId,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:(document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10)).slice(0,10),end:(document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10)).slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
+  const p={id:nextId++,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
   showHint(`Saving "${p.name}"…`,1500);
-  apiPost({action:'create', project:{...p, stagingYN:!!p.shapes.some(s=>s.isStagingArea), roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
-    if(res && res.id){
-      const idx=projects.findIndex(x=>x.id===tempId);
+  apiPost({action:'create',project:{...p,stagingYN:!!p.shapes.some(s=>s.isStagingArea),roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
+    if(res&&res.id){
+      const idx=projects.findIndex(x=>x.id===p.id);
       if(idx>=0) projects[idx].id=res.id;
       renderSidebar();
-      showHint(`✓ "${p.name}" saved to sheet`,2500);
+      showHint(`✓ "${p.name}" saved`,2500);
     } else {
-      showHint(`⚠ "${p.name}" saved locally only`,3000);
+      showHint(`⚠ Saved locally only — check sheet connection`,3000);
     }
   });
 }
@@ -914,7 +907,7 @@ function changePhase(id,v){
   const p=projects.find(x=>String(x.id)===sid);
   if(!p)return;
   p.phase=v;
-  const col=PHASES[v].color, label=PHASES[v].label;
+  const col=PHASES[v].color,label=PHASES[v].label;
   document.querySelectorAll('.pcard').forEach(card=>{
     const sel=card.querySelector('.phase-change-select');
     if(sel&&sel.getAttribute('onchange')&&sel.getAttribute('onchange').includes("'"+sid+"'")){
@@ -922,7 +915,7 @@ function changePhase(id,v){
       const badge=card.querySelector('.badge');
       if(badge){badge.style.background=col;badge.textContent=label;}
       const fill=card.querySelector('.pbar-fill');
-      if(fill) fill.style.background=col;
+      if(fill)fill.style.background=col;
     }
   });
   refreshMap();updateStats();buildMiniLegend();
@@ -996,14 +989,14 @@ function buildProjectsHTML(){
     const midMonth=new Date(selMonthStart.getTime()+((selMonthEnd-selMonthStart)/2));
     const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100),col=PHASES[p.phase].color;
     const opts=Object.entries(PHASES).filter(([k])=>k!=='staging'&&k!=='road').map(([k,v])=>`<option value="${k}"${k===p.phase?' selected':''}>${v.label}</option>`).join('');
-    html+=`<div class="pcard" style="border-left-color:${col}" onclick="focusProject(${p.id})" oncontextmenu="showContextMenu(event,${p.id})">
+    html+=`<div class="pcard" style="border-left-color:${col}" onclick="focusProject('${p.id}')" oncontextmenu="showContextMenu(event,'${p.id}')">
       <span class="badge" style="background:${col}">${PHASES[p.phase].label}</span>
       <div class="pname">${p.name}</div>
       <div class="pmeta">${p.type} · ${p.start.slice(0,7)} – ${p.end.slice(0,7)}</div>
       <div class="pbar"><div class="pbar-fill" style="width:${pct}%;background:${col}"></div></div>
       <div class="pct">${pct}% elapsed</div>
       <div class="phase-change-row"><label>Change phase:</label>
-        <select class="phase-change-select" onchange="changePhase(${p.id},this.value)" onclick="event.stopPropagation()">${opts}</select></div>
+        <select class="phase-change-select" onchange="changePhase('${p.id}',this.value)" onclick="event.stopPropagation()">${opts}</select></div>
     </div>`;
   });
   if(!count)html+='<div class="empty">No active projects in this window.</div>';
@@ -1030,31 +1023,19 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 buildTimeline();
 
-// Load from Google Sheet if configured
 (async()=>{
-  if(!SHEET_API){
-    const b=document.getElementById('setupBanner');
-    if(b) b.style.display='flex';
-    refreshMap();renderSidebar();buildMiniLegend();updateStats();
-    showHint('Drag to pan · Scroll to zoom · Click a dot to inspect');
-    return;
-  }
   showHint('Loading projects…',0);
-  const loaded = await apiGet();
-  if(loaded){
-    // Normalize dates — sheet may return full ISO strings, map expects YYYY-MM-DD
-    projects = loaded.map(p => ({
-      ...p,
-      start: p.start ? String(p.start).slice(0,10) : p.start,
-      end:   p.end   ? String(p.end).slice(0,10)   : p.end,
+  const loaded=await apiGet();
+  if(loaded&&loaded.length){
+    projects=loaded.map(p=>({...p,
+      start:p.start?String(p.start).slice(0,10):p.start,
+      end:p.end?String(p.end).slice(0,10):p.end
     }));
     showHint('Projects loaded ✓',2000);
   } else {
-    showHint('Could not load from sheet — showing sample data',4000);
+    showHint('Drag to pan · Scroll to zoom · Click a dot to inspect',3500);
   }
   refreshMap();renderSidebar();buildMiniLegend();updateStats();
-  // Re-trigger map size calculation after content loads
-  setTimeout(()=>{ map.invalidateSize(); syncCanvas(); redraw(); }, 300);
 })();
 </script>
 </body>
