@@ -796,7 +796,7 @@ function saveProject(){
   if(!wizExtentShapes.length){alert('Please mark at least one project extent (pin or area) on the map.');return;}
   const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
   const tempId = 'p_' + Date.now();
-  const p={id:tempId,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
+  const p={id:tempId,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:(document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10)).slice(0,10),end:(document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10)).slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
   showHint(`Saving "${p.name}"…`,1500);
@@ -1040,13 +1040,8 @@ buildTimeline();
   showHint('Loading projects…',0);
   const loaded = await apiGet();
   if(loaded){
-    projects = loaded;
-    showHint('Projects loaded ✓',2000);
-  } else {
-    showHint('Could not load from sheet — showing sample data',4000);
-  }
-  refreshMap();renderSidebar();buildMiniLegend();updateStats();
-})();
-</script>
-</body>
-</html>
+    // Normalize dates — sheet may return full ISO strings, map expects YYYY-MM-DD
+    projects = loaded.map(p => ({
+      ...p,
+      start: p.start ? String(p.start).slice(0,10) : p.start,
+      end:   p.end   ? St
