@@ -383,6 +383,30 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </div>
 
 <script>
+// ── GOOGLE SHEETS API ────────────────────────────────────────────────
+const SHEET_API = window.SHEET_API_URL || 'https://script.google.com/macros/s/AKfycbya6UoCy4RFrnIfvS3Z-_L_2MHF_gFZ3LwVGz6WKAsjm2BSAGClHSsvgR05c8YuZOE4/exec';
+
+async function apiGet() {
+  if (!SHEET_API) return null;
+  try {
+    const r = await fetch(SHEET_API);
+    const d = await r.json();
+    return d.projects || null;
+  } catch(e) { console.warn('API load failed:', e); return null; }
+}
+
+async function apiPost(body) {
+  if (!SHEET_API) return null;
+  try {
+    const r = await fetch(SHEET_API, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {'Content-Type': 'application/json'}
+    });
+    return await r.json();
+  } catch(e) { console.warn('API post failed:', e); return null; }
+}
+
 const PHASES={charter:{label:'Charter',color:'#534AB7'},design:{label:'Design',color:'#1D9E75'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -772,10 +796,21 @@ function saveProject(){
   if(!name){alert('Please enter a project name.');return;}
   if(!wizExtentShapes.length){alert('Please mark at least one project extent (pin or area) on the map.');return;}
   const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
-  const p={id:nextId++,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
+  const tempId = 'p_' + Date.now();
+  const p={id:tempId,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
-  showHint(`✓ "${p.name}" saved`,3000);
+  showHint(`Saving "${p.name}"…`,1500);
+  apiPost({action:'create', project:{...p, stagingYN:!!p.shapes.some(s=>s.isStagingArea), roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
+    if(res && res.id){
+      const idx=projects.findIndex(x=>x.id===tempId);
+      if(idx>=0) projects[idx].id=res.id;
+      renderSidebar();
+      showHint(`✓ "${p.name}" saved to sheet`,2500);
+    } else {
+      showHint(`⚠ "${p.name}" saved locally only`,3000);
+    }
+  });
 }
 
 // ── EDIT EXTENTS ────────────────────────────────────────────────────
@@ -873,7 +908,25 @@ function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(con
 // ── TOGGLE FILTERS ──────────────────────────────────────────────────
 function toggleStage(el){const s=el.dataset.stage;if(visibleStages.has(s)){visibleStages.delete(s);el.classList.remove('on');}else{visibleStages.add(s);el.classList.add('on');}refreshMap();updateStats();renderSidebar();buildMiniLegend();}
 function toggleType(el){const t=el.dataset.type;if(visibleTypes.has(t)){visibleTypes.delete(t);el.classList.remove('on');}else{visibleTypes.add(t);el.classList.add('on');}refreshMap();updateStats();renderSidebar();}
-function changePhase(id,v){const p=projects.find(x=>x.id===id);if(p){p.phase=v;refreshMap();renderSidebar();updateStats();buildMiniLegend();}}
+function changePhase(id,v){
+  const sid=String(id);
+  const p=projects.find(x=>String(x.id)===sid);
+  if(!p)return;
+  p.phase=v;
+  const col=PHASES[v].color, label=PHASES[v].label;
+  document.querySelectorAll('.pcard').forEach(card=>{
+    const sel=card.querySelector('.phase-change-select');
+    if(sel&&sel.getAttribute('onchange')&&sel.getAttribute('onchange').includes("'"+sid+"'")){
+      card.style.borderLeftColor=col;
+      const badge=card.querySelector('.badge');
+      if(badge){badge.style.background=col;badge.textContent=label;}
+      const fill=card.querySelector('.pbar-fill');
+      if(fill) fill.style.background=col;
+    }
+  });
+  refreshMap();updateStats();buildMiniLegend();
+  apiPost({action:'update',project:{...p}});
+}
 function focusProject(id){const p=projects.find(x=>x.id===id);if(!p)return;const pin=p.shapes.find(s=>s.type==='pin');if(pin)map.flyTo([pin.lat,pin.lng],18,{duration:.7});else if(p.shapes[0]?.latlngs){const b=L.latLngBounds(p.shapes[0].latlngs);map.flyToBounds(b,{padding:[40,40],duration:.7});}}
 
 // ── TIMELINE ────────────────────────────────────────────────────────
@@ -975,8 +1028,26 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 // ── INIT ────────────────────────────────────────────────────────────
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 buildTimeline();
-refreshMap();renderSidebar();buildMiniLegend();updateStats();
-showHint('Drag to pan · Scroll to zoom · Click a dot to inspect');
+
+// Load from Google Sheet if configured
+(async()=>{
+  if(!SHEET_API){
+    const b=document.getElementById('setupBanner');
+    if(b) b.style.display='flex';
+    refreshMap();renderSidebar();buildMiniLegend();updateStats();
+    showHint('Drag to pan · Scroll to zoom · Click a dot to inspect');
+    return;
+  }
+  showHint('Loading projects…',0);
+  const loaded = await apiGet();
+  if(loaded){
+    projects = loaded;
+    showHint('Projects loaded ✓',2000);
+  } else {
+    showHint('Could not load from sheet — showing sample data',4000);
+  }
+  refreshMap();renderSidebar();buildMiniLegend();updateStats();
+})();
 </script>
 </body>
 </html>
