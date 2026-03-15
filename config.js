@@ -2,5 +2,5 @@
 //  STEP 3 of setup: paste your Apps Script Web App URL below.
 //  This file is loaded by index.html automatically.
 // ================================================================
-window.SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzU1EruEPi2V979vhoOzeg6SrztvOy1S0o2ppUp5KPu3vHof53IV0zEhTatd4zcyirr/exec';
+window.SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 // Example: window.SHEET_API_URL = https://script.google.com/macros/s/AKfycbyMpdxnc8KH18lZlYK8lzniKxP71ulomkPZ2J1tMeLLzGTDRY0au1q-3_EW25ubkMhH/exec
