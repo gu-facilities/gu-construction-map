@@ -263,6 +263,11 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <option value="5" selected>5 Yrs</option>
         </select>
       </div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:#667;cursor:pointer;white-space:nowrap;user-select:none;flex-shrink:0;">
+        <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
+          style="accent-color:var(--navy);width:14px;height:14px;cursor:pointer;">
+        All projects
+      </label>
       <div class="tl-scroll" id="tlScroll">
         <div class="tl-track" id="tlTrack"></div>
       </div>
@@ -272,11 +277,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <div class="stat"><strong id="s-constr">0</strong>Construction</div>
       <div class="stat"><strong id="s-pre">0</strong>Preconstruction</div>
       <div class="stat"><strong id="s-plan">0</strong>Planning</div>
-      <label style="display:flex;align-items:center;gap:5px;font-size:.67rem;color:#556;cursor:pointer;margin-left:8px;user-select:none;">
-        <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
-          style="accent-color:var(--navy);width:14px;height:14px;cursor:pointer;">
-        Show all projects
-      </label>
+
       <div class="mleg" id="miniLegend"></div>
     </div>
   </div>
@@ -284,7 +285,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 
 <!-- CONTEXT MENU -->
 <div class="ctx-menu" id="ctxMenu">
-  <button onclick="openEditExtents()">✏️ Edit Project Extents</button>
+  <button onclick="openEditExtents()">✏️ Edit Project</button>
   <button class="danger" onclick="confirmRemoveProject()">🗑 Remove Project</button>
 </div>
 
@@ -396,10 +397,37 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 <!-- EDIT EXTENTS PANEL -->
 <div class="edit-modal-overlay" id="editPanel">
   <div class="edit-modal">
-    <h4 id="editPanelTitle">Edit Project Extents</h4>
-    <p class="ep-sub">Add or remove shapes for each section. Changes are saved to the project immediately.</p>
-    <div class="ep-sections">
+    <h4 id="editPanelTitle">Edit Project</h4>
+    <p class="ep-sub">Update project details and map extents. Click Save when done.</p>
 
+    <!-- Project Details -->
+    <div class="fields-grid" style="margin-bottom:14px;">
+      <div class="wf full"><label>Project Name</label>
+        <input type="text" id="edit-name" placeholder="Project name"></div>
+      <div class="wf full"><label>Project Manager</label>
+        <input type="text" id="edit-manager" placeholder="Project manager"></div>
+      <div class="wf"><label>Project Type</label>
+        <select id="edit-type">
+          <option>New Construction (Building, Structure, etc.)</option>
+          <option>Renovation</option><option>Infrastructure</option>
+          <option>Maintenance &amp; Repair</option><option>Landscape</option>
+          <option>ENGIE Project</option><option>Redgate Project</option>
+        </select></div>
+      <div class="wf"><label>Phase</label>
+        <select id="edit-phase">
+          <option value="charter">Charter</option><option value="design">Design</option>
+          <option value="pre">Preconstruction</option><option value="construction">Under Construction</option>
+          <option value="closeout">Closeout</option>
+        </select></div>
+      <div class="wf"><label>Start Date</label>
+        <input type="date" id="edit-start"></div>
+      <div class="wf"><label>End Date</label>
+        <input type="date" id="edit-end"></div>
+      <div class="wf full"><label>Description</label>
+        <textarea id="edit-desc" style="min-height:52px;resize:vertical;" placeholder="Project description..."></textarea></div>
+    </div>
+
+    <div class="ep-sections">
       <!-- Project Limits -->
       <div class="ep-section">
         <div class="ep-section-title">📍 Project Limits</div>
@@ -409,7 +437,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <button class="wdbtn" onclick="startEditAddDraw('pin','extents')">📍 Drop Pin</button>
         </div>
       </div>
-
       <!-- Staging Area -->
       <div class="ep-section">
         <div class="ep-section-title">🅿️ Staging Area</div>
@@ -419,7 +446,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <button class="wdbtn" onclick="startEditAddDraw('pin','staging')">📍 Drop Pin</button>
         </div>
       </div>
-
       <!-- Road Closure -->
       <div class="ep-section">
         <div class="ep-section-title">🚧 Road Closure</div>
@@ -429,10 +455,11 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <button class="wdbtn" onclick="startEditAddDraw('pin','road')">📍 Drop Pin</button>
         </div>
       </div>
-
     </div>
+
     <div class="ep-actions">
-      <button class="btn-ep-close" onclick="closeEditPanel()">✓ Done</button>
+      <button class="btn-cancel-wiz" onclick="closeEditPanel(false)">Cancel</button>
+      <button class="btn-ep-close" onclick="closeEditPanel(true)">💾 Save Changes</button>
     </div>
   </div>
 </div>
@@ -995,7 +1022,20 @@ function openEditExtents(){
   ctxMenu.style.display='none';
   editProjectId=contextProjectId;
   const p=projects.find(x=>x.id===editProjectId);if(!p)return;
-  document.getElementById('editPanelTitle').textContent=`Edit Extents — ${p.name}`;
+  document.getElementById('editPanelTitle').textContent=`Edit Project — ${p.name}`;
+  // Populate detail fields
+  document.getElementById('edit-name').value    = p.name    || '';
+  document.getElementById('edit-manager').value = p.manager || '';
+  document.getElementById('edit-desc').value    = p.desc    || '';
+  document.getElementById('edit-start').value   = p.start   || '';
+  document.getElementById('edit-end').value     = p.end     || '';
+  // Set type dropdown
+  const typeEl=document.getElementById('edit-type');
+  for(let i=0;i<typeEl.options.length;i++){
+    if(typeEl.options[i].value===p.type||typeEl.options[i].text===p.type){typeEl.selectedIndex=i;break;}
+  }
+  // Set phase dropdown
+  document.getElementById('edit-phase').value = p.phase || 'construction';
   renderEditShapes();
   document.getElementById('editPanel').classList.add('show');
 }
@@ -1084,13 +1124,27 @@ function finishEditDraw(){
   document.getElementById('editPanel').classList.add('show');
 }
 
-function closeEditPanel(){
+function closeEditPanel(save){
+  if(save===true){
+    const p=projects.find(x=>String(x.id)===String(editProjectId));
+    if(p){
+      const newName=document.getElementById('edit-name').value.trim();
+      if(!newName){alert('Project name cannot be empty.');return;}
+      p.name    = newName;
+      p.manager = document.getElementById('edit-manager').value.trim();
+      p.type    = document.getElementById('edit-type').value;
+      p.phase   = document.getElementById('edit-phase').value;
+      p.start   = document.getElementById('edit-start').value;
+      p.end     = document.getElementById('edit-end').value;
+      p.desc    = document.getElementById('edit-desc').value.trim();
+      refreshMap();renderSidebar();updateStats();buildMiniLegend();
+      apiPost({action:'update',project:{...p}});
+      showHint(`✓ "${p.name}" updated`,2500);
+    }
+  }
   document.getElementById('editPanel').classList.remove('show');
   editProjectId=null;editDrawing=false;editCurrentLLs=[];editDrawSection='extents';
   dc.style.pointerEvents='none';setTool('pan');
-  // Save updated shapes to sheet
-  const _ep=projects.find(x=>String(x.id)===String(contextProjectId));
-  if(_ep) apiPost({action:'update',project:{..._ep}});
 }
 
 // ── CONTEXT MENU ────────────────────────────────────────────────────
