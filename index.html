@@ -102,9 +102,15 @@ header h1{font-family:'EB Garamond',serif;font-size:1.05rem;font-weight:500;colo
 .btn-cancel-wiz{background:#f0f2f5;color:var(--navy);}
 
 /* Drawing indicator banner */
-.drawing-banner{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--gold);font-size:.72rem;font-weight:700;padding:7px 20px;border-radius:8px;z-index:8500;display:none;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);}
+.drawing-banner{
+  display:none;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--navy);color:var(--gold);
+  font-size:.72rem;font-weight:600;padding:7px 16px;
+  border-top:2px solid var(--gold);
+  position:relative;z-index:600;flex-shrink:0;
+}
 .drawing-banner.show{display:flex;}
-.drawing-banner button{background:var(--gold);color:var(--navy);border:none;border-radius:4px;padding:3px 10px;font-family:'Source Sans 3',sans-serif;font-size:.68rem;font-weight:700;cursor:pointer;}
+.drawing-banner button{background:var(--gold);color:var(--navy);border:none;border-radius:4px;padding:4px 14px;font-family:'Source Sans 3',sans-serif;font-size:.7rem;font-weight:700;cursor:pointer;white-space:nowrap;}
 
 /* Edit extents panel */
 /* Edit Extents Modal */
@@ -231,6 +237,10 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <span class="spill on" data-stage="construction" style="background:#D85A30" onclick="toggleStage(this)">Under Construction</span>
       <span class="spill on" data-stage="closeout"     style="background:#639922" onclick="toggleStage(this)">Closeout</span>
     </div>
+    <div class="drawing-banner" id="drawingBanner">
+      <span id="bannerMsg">Click to place points · Double-click to finish</span>
+      <button onclick="finishWizardDraw()">✓ Done Drawing</button>
+    </div>
     <div class="map-wrap" id="mapWrap">
       <div id="map"></div>
       <canvas id="drawCanvas"></canvas>
@@ -283,10 +293,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </div>
 
 <!-- DRAWING BANNER (shows while drawing in wizard) -->
-<div class="drawing-banner" id="drawingBanner">
-  <span id="bannerMsg">Click to place points · Double-click to finish</span>
-  <button onclick="finishWizardDraw()">✓ Done Drawing</button>
-</div>
+
 
 <!-- WIZARD -->
 <div class="wizard-overlay" id="wizardOverlay">
@@ -470,8 +477,8 @@ map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
 // Custom pane for polygons below canvas, popups stay above canvas at z:700
 map.createPane('polygonPane');
 map.getPane('polygonPane').style.zIndex = 350;
-map.createPane('markerPane2');
-map.getPane('markerPane2').style.zIndex = 460;
+// Ensure popup pane is well above the canvas (450)
+map.getPane('popupPane').style.zIndex = 700;
 const markerGroup=L.layerGroup().addTo(map);
 const polygonGroup=L.layerGroup().addTo(map);
 
