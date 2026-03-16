@@ -9,6 +9,10 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
+.leaflet-popup-content-wrapper { cursor: move; user-select: none; }
+.leaflet-popup-content-wrapper:active { cursor: grabbing; }
+</style>
+<style>
 :root{--navy:#041E42;--navy2:#071d3b;--navy3:#03111f;--gold:#C9A96E;--cream:#F5EFE0;--gray:#8a96a3;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Source Sans 3',sans-serif;background:var(--cream);color:var(--navy);overflow:hidden;height:100vh;}
@@ -475,6 +479,51 @@ const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/service
 const streets=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
 const map=L.map('map',{center:[38.9072,-77.0741],zoom:17,layers:[satellite],doubleClickZoom:false});
 map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
+
+// ── DRAGGABLE POPUPS ─────────────────────────────────────────────────
+function makeDraggable(popup) {
+  popup.on('add', function() {
+    var wrapper = popup.getElement();
+    if (!wrapper) return;
+    var isDragging = false, startX, startY, origLeft, origTop;
+
+    wrapper.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      var rect = wrapper.getBoundingClientRect();
+      origLeft = wrapper.offsetLeft;
+      origTop  = wrapper.offsetTop;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      wrapper.style.left = (origLeft + dx) + 'px';
+      wrapper.style.top  = (origTop  + dy) + 'px';
+      // Detach popup from map latlng so it stays where dragged
+      wrapper.style.transform = 'none';
+      wrapper.style.position  = 'absolute';
+    });
+
+    document.addEventListener('mouseup', function() {
+      isDragging = false;
+    });
+  });
+  return popup;
+}
+
+// Patch L.Layer.bindPopup to auto-apply draggable
+var _origBindPopup = L.Layer.prototype.bindPopup;
+L.Layer.prototype.bindPopup = function(content, options) {
+  _origBindPopup.call(this, content, options);
+  makeDraggable(this._popup);
+  return this;
+};
 // Custom pane for polygons below canvas, popups stay above canvas at z:700
 // polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
 map.createPane('polygonPane');
