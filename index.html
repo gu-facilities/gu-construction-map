@@ -157,7 +157,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill:hover{transform:scale(1.04);}
 .map-wrap{flex:1;position:relative;overflow:hidden;}
 #map{position:absolute;inset:0;}
-#drawCanvas{position:absolute;inset:0;z-index:200;pointer-events:none;}
+#drawCanvas{position:absolute;top:0;left:0;z-index:450;pointer-events:none;}
 .proj-dot{width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;}
 .proj-dot:hover{transform:scale(1.25);}
 .leaflet-popup-content-wrapper{background:rgba(4,30,66,.95);color:#fff;border-radius:6px;border-left:3px solid var(--gold);padding:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
@@ -246,7 +246,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
     </div>
     <div class="map-wrap" id="mapWrap">
       <div id="map"></div>
-      <canvas id="drawCanvas"></canvas>
+      <!-- canvas appended to Leaflet container via JS for correct stacking -->
       <div class="hint-toast" id="hintToast"></div>
     </div>
     <div class="tl-bar" style="flex-wrap:wrap;row-gap:0;">
@@ -624,9 +624,18 @@ function refreshMap(){
 }
 
 // ── CANVAS ──────────────────────────────────────────────────────────
-const dc=document.getElementById('drawCanvas');
+// Create canvas and append inside Leaflet container so z-index is relative to map panes
+const dc=document.createElement('canvas');
+dc.id='drawCanvas';
+document.getElementById('drawCanvas')?.remove();
+map.getContainer().appendChild(dc);
+dc.style.cssText='position:absolute;top:0;left:0;z-index:450;pointer-events:none;';
 const ctx=dc.getContext('2d');
-function syncCanvas(){const r=document.getElementById('mapWrap').getBoundingClientRect();dc.width=r.width;dc.height=r.height;}
+function syncCanvas(){
+  const mc=map.getContainer();
+  dc.width=mc.offsetWidth;dc.height=mc.offsetHeight;
+  dc.style.width=mc.offsetWidth+'px';dc.style.height=mc.offsetHeight+'px';
+}
 syncCanvas();
 window.addEventListener('resize',()=>{syncCanvas();redraw();});
 map.on('move zoom moveend zoomend resize',redraw);
