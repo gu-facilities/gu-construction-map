@@ -272,6 +272,11 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <div class="stat"><strong id="s-constr">0</strong>Construction</div>
       <div class="stat"><strong id="s-pre">0</strong>Preconstruction</div>
       <div class="stat"><strong id="s-plan">0</strong>Planning</div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.67rem;color:#556;cursor:pointer;margin-left:8px;user-select:none;">
+        <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
+          style="accent-color:var(--navy);width:14px;height:14px;cursor:pointer;">
+        Show all projects
+      </label>
       <div class="mleg" id="miniLegend"></div>
     </div>
   </div>
@@ -472,6 +477,7 @@ let editProjectId=null,editDrawing=false,editDrawTool=null,editDrawSection='exte
 
 // Playback
 let playing=false,playInterval=null;
+let showAllProjects=false;
 
 // ── LEAFLET ─────────────────────────────────────────────────────────
 const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,attribution:'Tiles © Esri'});
@@ -550,7 +556,7 @@ function refreshMap(){
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
-    if(ps>selMonthEnd||pe<selMonthStart)return;
+    if(!showAllProjects&&(ps>selMonthEnd||pe<selMonthStart))return;
     const col=PHASES[p.phase].color;
     const midMonth=new Date((selMonthStart.getTime()+selMonthEnd.getTime())/2);
     const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
@@ -661,7 +667,7 @@ function redraw(){
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
-    if(ps>_smEnd||pe<_smStart)return;
+    if(!showAllProjects&&(ps>_smEnd||pe<_smStart))return;
     const pcol=PHASES[p.phase]?.color||PHASES['construction'].color;
     p.shapes.forEach(s=>{
       if(s.type!=='polygon'||!s.latlngs)return;
@@ -1096,6 +1102,11 @@ function closeConfirm(){document.getElementById('confirmOverlay').classList.remo
 function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(contextProjectId));closeConfirm();refreshMap();renderSidebar();updateStats();buildMiniLegend();apiPost({action:'delete',id:contextProjectId});}
 
 // ── TOGGLE FILTERS ──────────────────────────────────────────────────
+function toggleShowAll(val){
+  showAllProjects=val;
+  refreshMap();renderSidebar();updateStats();
+}
+
 function toggleStage(el){const s=el.dataset.stage;if(visibleStages.has(s)){visibleStages.delete(s);el.classList.remove('on');}else{visibleStages.add(s);el.classList.add('on');}refreshMap();updateStats();renderSidebar();buildMiniLegend();}
 function toggleType(el){const t=el.dataset.type;if(visibleTypes.has(t)){visibleTypes.delete(t);el.classList.remove('on');}else{visibleTypes.add(t);el.classList.add('on');}refreshMap();updateStats();renderSidebar();}
 function changePhase(id,v){const p=projects.find(x=>x.id===id);if(p){p.phase=v;refreshMap();renderSidebar();updateStats();buildMiniLegend();}}
@@ -1162,7 +1173,7 @@ function buildProjectsHTML(){
   let count=0;
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
-    const ps=new Date(p.start),pe=new Date(p.end);if(ps>selMonthEnd||pe<selMonthStart)return;
+    const ps=new Date(p.start),pe=new Date(p.end);if(!showAllProjects&&(ps>selMonthEnd||pe<selMonthStart))return;
     count++;
     const midMonth=new Date(selMonthStart.getTime()+((selMonthEnd-selMonthStart)/2));
     const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100),col=PHASES[p.phase].color;
@@ -1191,7 +1202,7 @@ function updateStats(){
   selMonthEnd.setMonth(selMonthEnd.getMonth()+1);
   selMonthEnd.setDate(0);selMonthEnd.setHours(23,59,59,999);
   let a=0,c=0,pr=0,pl=0;
-  projects.forEach(p=>{if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;if(new Date(p.start)>selMonthEnd||new Date(p.end)<selMonthStart)return;a++;if(p.phase==='construction')c++;else if(p.phase==='pre')pr++;else if(p.phase==='charter'||p.phase==='design')pl++;});
+  projects.forEach(p=>{if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;if(!showAllProjects&&(new Date(p.start)>selMonthEnd||new Date(p.end)<selMonthStart))return;a++;if(p.phase==='construction')c++;else if(p.phase==='pre')pr++;else if(p.phase==='charter'||p.phase==='design')pl++;});
   document.getElementById('s-active').textContent=a;document.getElementById('s-constr').textContent=c;document.getElementById('s-pre').textContent=pr;document.getElementById('s-plan').textContent=pl;
 }
 
