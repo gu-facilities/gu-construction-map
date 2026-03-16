@@ -174,6 +174,15 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .leaflet-popup-close-button{color:var(--gold) !important;font-size:16px !important;top:6px !important;right:8px !important;}
 .vertex-handle{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .1s;}
 .vertex-handle:hover{transform:scale(1.5);background:var(--gold);}
+.vertex-ctx{position:fixed;background:#fff;border:1px solid #dde2ea;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:9200;min-width:160px;overflow:hidden;display:none;}
+.vertex-ctx button{display:block;width:100%;padding:8px 14px;text-align:left;background:none;border:none;font-family:'Source Sans 3',sans-serif;font-size:.75rem;cursor:pointer;color:var(--navy);font-weight:600;border-bottom:1px solid #f0f2f5;}
+.vertex-ctx button:hover{background:#f5f8ff;}
+.vertex-ctx button:last-child{border-bottom:none;}
+.vertex-ctx button.danger{color:#c0304a;}
+.vertex-ctx button.danger:hover{background:#fff5f6;}
+/* Midpoint handle — smaller, diamond shape for adding vertices */
+.midpoint-handle{width:10px;height:10px;background:white;border:2px solid var(--gold);transform:rotate(45deg);box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:crosshair;opacity:0.7;}
+.midpoint-handle:hover{opacity:1;transform:rotate(45deg) scale(1.3);}
 .hint-toast{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(4,30,66,.88);color:var(--gold);font-size:.64rem;font-weight:600;padding:5px 16px;border-radius:12px;z-index:600;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
 .hint-toast.show{opacity:1;}
 
@@ -324,6 +333,13 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       </div>
     </div>
   </div>
+</div>
+
+<!-- VERTEX CONTEXT MENU -->
+<div class="vertex-ctx" id="vertexCtx">
+  <button onclick="addVertexBefore()">➕ Add point before</button>
+  <button onclick="addVertexAfter()">➕ Add point after</button>
+  <button class="danger" onclick="removeVertex()">✕ Remove point</button>
 </div>
 
 <!-- OVERLAP PICKER -->
@@ -1265,35 +1281,45 @@ function deleteShape(i){
   renderEditShapes();refreshMap();showVertexHandles();
 }
 
+// Vertex editing state
+let _editShape=null, _editProject=null, _editVertexIdx=null;
+const vertexCtx=document.getElementById('vertexCtx');
+document.addEventListener('click',()=>vertexCtx.style.display='none');
+
 function editShapeVertices(shapeIndex){
   vertexGroup.clearLayers();
   const p=projects.find(x=>String(x.id)===String(editProjectId));if(!p)return;
   const s=p.shapes[shapeIndex];
   if(!s||s.type!=='polygon'||!s.latlngs)return;
+  _editShape=s; _editProject=p;
+
   const col=PHASES[p.phase]?.color||'#C9A96E';
-
-  // Hide edit modal so the full map is visible
   document.getElementById('editPanel').classList.remove('show');
-
-  // Show "Done Editing" banner
-  document.getElementById('bannerMsg').textContent='Drag the handles to reshape · Middle-mouse to pan · Click Done Editing when finished';
+  document.getElementById('bannerMsg').textContent='Drag handles to move · Right-click handle to add/remove · Middle-mouse to pan';
   document.getElementById('drawingBanner').classList.add('show');
   const doneBtn=document.querySelector('#drawingBanner button');
   doneBtn.textContent='✓ Done Editing';
   doneBtn.onclick=function(){
-    // Restore banner button
     doneBtn.textContent='✓ Done Drawing';
     doneBtn.onclick=finishWizardDraw;
     document.getElementById('drawingBanner').classList.remove('show');
     vertexGroup.clearLayers();
-    // Save and re-open edit panel
+    _editShape=null;_editProject=null;_editVertexIdx=null;
     apiPost({action:'update',project:{...p}});
     document.getElementById('editPanel').classList.add('show');
     showVertexHandles();
   };
 
-  // Place a draggable handle at every vertex
-  s.latlngs.forEach((ll,vi)=>{
+  rebuildVertexHandles(s, p, col);
+  try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[100,100],duration:.6});}catch(ex){}
+}
+
+function rebuildVertexHandles(s, p, col){
+  vertexGroup.clearLayers();
+  const lls=s.latlngs;
+
+  // ── Vertex handles (circles) ──────────────────────────────────────
+  lls.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
     const icon=L.divIcon({
       className:'',
@@ -1301,18 +1327,91 @@ function editShapeVertices(shapeIndex){
       iconSize:[16,16],iconAnchor:[8,8]
     });
     const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:5000,pane:'markerPane'}).addTo(vertexGroup);
+
+    // Drag to move
     vm.on('drag',function(e){
       const nl=e.target.getLatLng();
-      s.latlngs[vi]=Array.isArray(s.latlngs[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
+      lls[vi]=Array.isArray(lls[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
       refreshMap();
     });
     vm.on('dragend',function(){
       apiPost({action:'update',project:{...p}});
+      rebuildVertexHandles(s,p,col);
+    });
+
+    // Right-click to show context menu
+    vm.on('contextmenu',function(e){
+      L.DomEvent.stopPropagation(e);
+      e.originalEvent.preventDefault();
+      _editVertexIdx=vi;
+      vertexCtx.style.display='block';
+      vertexCtx.style.left=(e.originalEvent.clientX+4)+'px';
+      vertexCtx.style.top=(e.originalEvent.clientY+4)+'px';
     });
   });
 
-  // Fly to the shape so it's fully visible
-  try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[100,100],duration:.6});}catch(ex){}
+  // ── Midpoint handles (diamonds) — click to add a vertex ──────────
+  lls.forEach((ll,vi)=>{
+    const nextIdx=(vi+1)%lls.length;
+    const ll1=Array.isArray(ll)?ll:[ll.lat,ll.lng];
+    const ll2=Array.isArray(lls[nextIdx])?lls[nextIdx]:[lls[nextIdx].lat,lls[nextIdx].lng];
+    const midLat=(ll1[0]+ll2[0])/2;
+    const midLng=(ll1[1]+ll2[1])/2;
+    const midIcon=L.divIcon({
+      className:'',
+      html:`<div class="midpoint-handle" style="border-color:${col};"></div>`,
+      iconSize:[10,10],iconAnchor:[5,5]
+    });
+    const mm=L.marker([midLat,midLng],{icon:midIcon,zIndexOffset:4000,pane:'markerPane'}).addTo(vertexGroup);
+    mm.on('click',function(e){
+      L.DomEvent.stopPropagation(e);
+      // Insert new vertex after vi
+      const newPt=[midLat,midLng];
+      lls.splice(nextIdx,0,newPt);
+      refreshMap();
+      apiPost({action:'update',project:{...p}});
+      rebuildVertexHandles(s,p,col);
+    });
+  });
+}
+
+function addVertexBefore(){
+  vertexCtx.style.display='none';
+  if(!_editShape||_editVertexIdx===null)return;
+  const lls=_editShape.latlngs;
+  const vi=_editVertexIdx;
+  const prevIdx=(vi-1+lls.length)%lls.length;
+  const ll1=Array.isArray(lls[prevIdx])?lls[prevIdx]:[lls[prevIdx].lat,lls[prevIdx].lng];
+  const ll2=Array.isArray(lls[vi])?lls[vi]:[lls[vi].lat,lls[vi].lng];
+  lls.splice(vi,0,[(ll1[0]+ll2[0])/2,(ll1[1]+ll2[1])/2]);
+  refreshMap();
+  apiPost({action:'update',project:{..._editProject}});
+  rebuildVertexHandles(_editShape,_editProject,PHASES[_editProject.phase]?.color||'#C9A96E');
+}
+
+function addVertexAfter(){
+  vertexCtx.style.display='none';
+  if(!_editShape||_editVertexIdx===null)return;
+  const lls=_editShape.latlngs;
+  const vi=_editVertexIdx;
+  const nextIdx=(vi+1)%lls.length;
+  const ll1=Array.isArray(lls[vi])?lls[vi]:[lls[vi].lat,lls[vi].lng];
+  const ll2=Array.isArray(lls[nextIdx])?lls[nextIdx]:[lls[nextIdx].lat,lls[nextIdx].lng];
+  lls.splice(vi+1,0,[(ll1[0]+ll2[0])/2,(ll1[1]+ll2[1])/2]);
+  refreshMap();
+  apiPost({action:'update',project:{..._editProject}});
+  rebuildVertexHandles(_editShape,_editProject,PHASES[_editProject.phase]?.color||'#C9A96E');
+}
+
+function removeVertex(){
+  vertexCtx.style.display='none';
+  if(!_editShape||_editVertexIdx===null)return;
+  if(_editShape.latlngs.length<=3){alert('A polygon must have at least 3 points.');return;}
+  _editShape.latlngs.splice(_editVertexIdx,1);
+  _editVertexIdx=null;
+  refreshMap();
+  apiPost({action:'update',project:{..._editProject}});
+  rebuildVertexHandles(_editShape,_editProject,PHASES[_editProject.phase]?.color||'#C9A96E');
 }
 
 function startEditAddDraw(drawTool, section){
