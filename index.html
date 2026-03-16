@@ -181,8 +181,8 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .vertex-ctx button.danger{color:#c0304a;}
 .vertex-ctx button.danger:hover{background:#fff5f6;}
 /* Midpoint handle — smaller, diamond shape for adding vertices */
-.midpoint-handle{width:10px;height:10px;background:white;border:2px solid var(--gold);transform:rotate(45deg);box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:crosshair;opacity:0.7;}
-.midpoint-handle:hover{opacity:1;transform:rotate(45deg) scale(1.3);}
+.midpoint-handle{width:12px;height:12px;background:#fff3d4;border:2.5px solid var(--gold);transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:crosshair;opacity:0.85;}
+.midpoint-handle:hover{opacity:1;background:var(--gold);transform:rotate(45deg) scale(1.4);}
 .hint-toast{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(4,30,66,.88);color:var(--gold);font-size:.64rem;font-weight:600;padding:5px 16px;border-radius:12px;z-index:600;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
 .hint-toast.show{opacity:1;}
 
@@ -1284,7 +1284,17 @@ function deleteShape(i){
 // Vertex editing state
 let _editShape=null, _editProject=null, _editVertexIdx=null;
 const vertexCtx=document.getElementById('vertexCtx');
-document.addEventListener('click',()=>vertexCtx.style.display='none');
+let _vertexCtxJustOpened=false;
+document.addEventListener('click',function(e){
+  if(_vertexCtxJustOpened){_vertexCtxJustOpened=false;return;}
+  if(!vertexCtx.contains(e.target)) vertexCtx.style.display='none';
+});
+document.addEventListener('contextmenu',function(e){
+  // Hide vertex ctx if clicking elsewhere
+  if(!vertexCtx.contains(e.target)&&vertexCtx.style.display==='block'){
+    vertexCtx.style.display='none';
+  }
+});
 
 function editShapeVertices(shapeIndex){
   vertexGroup.clearLayers();
@@ -1339,14 +1349,19 @@ function rebuildVertexHandles(s, p, col){
       rebuildVertexHandles(s,p,col);
     });
 
-    // Right-click to show context menu
-    vm.on('contextmenu',function(e){
-      L.DomEvent.stopPropagation(e);
-      e.originalEvent.preventDefault();
-      _editVertexIdx=vi;
-      vertexCtx.style.display='block';
-      vertexCtx.style.left=(e.originalEvent.clientX+4)+'px';
-      vertexCtx.style.top=(e.originalEvent.clientY+4)+'px';
+    // Right-click to show context menu — wire to the DOM element directly
+    vm.on('add',function(){
+      const el=vm.getElement();
+      if(!el)return;
+      el.addEventListener('contextmenu',function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        _editVertexIdx=vi;
+        _vertexCtxJustOpened=true;
+        vertexCtx.style.display='block';
+        vertexCtx.style.left=(ev.clientX+4)+'px';
+        vertexCtx.style.top=(ev.clientY+4)+'px';
+      });
     });
   });
 
@@ -1359,8 +1374,8 @@ function rebuildVertexHandles(s, p, col){
     const midLng=(ll1[1]+ll2[1])/2;
     const midIcon=L.divIcon({
       className:'',
-      html:`<div class="midpoint-handle" style="border-color:${col};"></div>`,
-      iconSize:[10,10],iconAnchor:[5,5]
+      html:`<div class="midpoint-handle" style="border-color:${col};background:#fff3d4;"></div>`,
+      iconSize:[14,14],iconAnchor:[7,7]
     });
     const mm=L.marker([midLat,midLng],{icon:midIcon,zIndexOffset:4000,pane:'markerPane'}).addTo(vertexGroup);
     mm.on('click',function(e){
