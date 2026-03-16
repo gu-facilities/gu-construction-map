@@ -308,9 +308,9 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <h3>New Project</h3>
       <p class="subtitle">Fill in the project details, then mark its extents on the map.</p>
       <div class="fields-grid">
-        <div class="wf full"><label>Project Name</label>
+        <div class="wf full"><label>Project Name <span style="color:#c0304a">*</span></label>
           <input type="text" id="wiz-name" placeholder="e.g. White-Gravenor Hall Renovation"></div>
-        <div class="wf full"><label>Project Manager</label>
+        <div class="wf full"><label>Project Manager <span style="color:#c0304a">*</span></label>
           <input type="text" id="wiz-manager" placeholder="e.g. Jane Smith"></div>
         <div class="wf"><label>Project Type</label>
           <select id="wiz-type">
@@ -325,9 +325,9 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
             <option value="pre">Preconstruction</option><option value="construction">Under Construction</option>
             <option value="closeout">Closeout</option>
           </select></div>
-        <div class="wf"><label>Start Date</label><input type="date" id="wiz-start"></div>
-        <div class="wf"><label>End Date</label><input type="date" id="wiz-end"></div>
-        <div class="wf full"><label>Description</label>
+        <div class="wf"><label>Start Date <span style="color:#c0304a">*</span></label><input type="date" id="wiz-start"></div>
+        <div class="wf"><label>End Date <span style="color:#c0304a">*</span></label><input type="date" id="wiz-end"></div>
+        <div class="wf full"><label>Description <span style="color:#c0304a">*</span></label>
           <textarea id="wiz-desc" placeholder="Brief description of project scope..."></textarea></div>
       </div>
 
@@ -377,6 +377,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       </div>
 
       <div class="wizard-actions">
+        <span style="font-size:.65rem;color:#a0aab8;margin-right:auto"><span style="color:#c0304a">*</span> Required fields</span>
         <button class="btn-cancel-wiz" onclick="closeWizard()">Cancel</button>
         <button class="btn-save" onclick="saveProject()">💾 Save Project</button>
       </div>
@@ -904,11 +905,29 @@ function removeWizShape(section,i){
 
 function saveProject(){
   const name=document.getElementById('wiz-name').value.trim();
-  if(!name){alert('Please enter a project name.');return;}
-  if(!wizExtentShapes.length){alert('Please mark at least one project extent (pin or area) on the map.');return;}
-  const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
   const manager=document.getElementById('wiz-manager').value.trim();
-  const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
+  const startVal=document.getElementById('wiz-start').value;
+  const endVal=document.getElementById('wiz-end').value;
+  const desc=document.getElementById('wiz-desc').value.trim();
+
+  // Validate all required fields
+  const errors=[];
+  if(!name)    errors.push('• Project Name');
+  if(!manager) errors.push('• Project Manager');
+  if(!startVal) errors.push('• Start Date');
+  if(!endVal)   errors.push('• End Date');
+  if(!desc)     errors.push('• Description');
+  if(!wizExtentShapes.length) errors.push('• Project Extents (mark at least one pin or area on the map)');
+  if(errors.length){
+    alert('Please complete the following required fields:\n\n' + errors.join('\n'));
+    return;
+  }
+  if(new Date(endVal) <= new Date(startVal)){
+    alert('End Date must be after Start Date.');
+    return;
+  }
+  const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
+  const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:startVal,end:endVal,desc:desc,shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
   showHint(`Saving "${p.name}"…`,1500);
