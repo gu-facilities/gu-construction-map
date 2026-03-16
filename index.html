@@ -49,6 +49,12 @@ header h1{font-family:'EB Garamond',serif;font-size:1.05rem;font-weight:500;colo
 
 /* ── CONTEXT MENU ── */
 .ctx-menu{position:fixed;background:#fff;border:1px solid #dde2ea;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9000;min-width:185px;overflow:hidden;display:none;}
+.overlap-menu{position:fixed;background:#fff;border:1px solid #dde2ea;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);z-index:9100;min-width:210px;overflow:hidden;display:none;}
+.overlap-menu-title{padding:8px 12px 5px;font-size:.62rem;font-weight:700;color:#8a9ab0;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f0f2f5;}
+.overlap-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:.74rem;color:var(--navy);font-weight:600;border-bottom:1px solid #f5f5f5;}
+.overlap-item:hover{background:#f5f8ff;}
+.overlap-item:last-child{border-bottom:none;}
+.overlap-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 .ctx-menu button{display:block;width:100%;padding:9px 14px;text-align:left;background:none;border:none;font-family:'Source Sans 3',sans-serif;font-size:.75rem;cursor:pointer;color:var(--navy);font-weight:600;border-bottom:1px solid #f0f2f5;}
 .ctx-menu button:hover{background:#f5f8ff;}
 .ctx-menu button.danger{color:#c0304a;}
@@ -165,6 +171,8 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .leaflet-popup-content strong{font-size:.8rem;display:block;margin-bottom:3px;}
 .leaflet-popup-tip-container{display:none;}
 .leaflet-popup-close-button{color:var(--gold) !important;font-size:16px !important;top:6px !important;right:8px !important;}
+.vertex-handle{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .1s;}
+.vertex-handle:hover{transform:scale(1.5);background:var(--gold);}
 .hint-toast{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(4,30,66,.88);color:var(--gold);font-size:.64rem;font-weight:600;padding:5px 16px;border-radius:12px;z-index:600;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
 .hint-toast.show{opacity:1;}
 
@@ -295,6 +303,12 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <div class="mleg" id="miniLegend"></div>
     </div>
   </div>
+</div>
+
+<!-- OVERLAP PICKER -->
+<div class="overlap-menu" id="overlapMenu">
+  <div class="overlap-menu-title">Select project</div>
+  <div id="overlapItems"></div>
 </div>
 
 <!-- CONTEXT MENU -->
@@ -575,9 +589,92 @@ map.on('popupopen', function(e) {
 // polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
 map.createPane('polygonPane');
 map.getPane('polygonPane').style.zIndex = 500;
-map.getPane('popupPane').style.zIndex   = 800;
-map.getPane('tooltipPane').style.zIndex = 750;
+map.getPane('popupPane').style.zIndex   = 1000;
+map.getPane('tooltipPane').style.zIndex = 900;
+map.getPane('popupPane').style.overflow = 'visible';
 const markerGroup=L.layerGroup().addTo(map);
+const vertexGroup=L.layerGroup().addTo(map);
+
+// ── OVERLAP SELECTOR ─────────────────────────────────────────────────
+const overlapMenu=document.getElementById('overlapMenu');
+document.addEventListener('click',e=>{if(!overlapMenu.contains(e.target))overlapMenu.style.display='none';});
+
+function ptInPoly(lat,lng,lls){
+  let inside=false;
+  for(let i=0,j=lls.length-1;i<lls.length;j=i++){
+    const [xi,yi]=Array.isArray(lls[i])?lls[i]:[lls[i].lat,lls[i].lng];
+    const [xj,yj]=Array.isArray(lls[j])?lls[j]:[lls[j].lat,lls[j].lng];
+    if(((yi>lng)!=(yj>lng))&&(lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function getProjectsAt(lat,lng){
+  const ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
+  const we=filterEnd||(()=>{const d=new Date(ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
+  const hits=[];
+  projects.forEach(p=>{
+    if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
+    if(!showAllProjects&&(new Date(p.start)>we||new Date(p.end)<ws))return;
+    if(hits.find(h=>h.id===p.id))return;
+    p.shapes.forEach(s=>{
+      if(s.type==='polygon'&&s.latlngs&&ptInPoly(lat,lng,s.latlngs)) hits.push(p);
+    });
+  });
+  return hits;
+}
+
+map.on('click',function(e){
+  const hits=getProjectsAt(e.latlng.lat,e.latlng.lng);
+  if(hits.length<2)return;
+  document.getElementById('overlapItems').innerHTML=hits.map(p=>{
+    const col=PHASES[p.phase]?.color||'#888';
+    return `<div class="overlap-item" onclick="showProjectPopup('${p.id}',${e.latlng.lat},${e.latlng.lng});overlapMenu.style.display='none'">
+      <div class="overlap-dot" style="background:${col}"></div>${p.name}</div>`;
+  }).join('');
+  overlapMenu.style.display='block';
+  overlapMenu.style.left=e.originalEvent.clientX+'px';
+  overlapMenu.style.top=e.originalEvent.clientY+'px';
+});
+
+function showProjectPopup(id,lat,lng){
+  const p=projects.find(x=>String(x.id)===String(id));if(!p)return;
+  const col=PHASES[p.phase].color;
+  const ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
+  const we=filterEnd||(()=>{const d=new Date(ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
+  const pct=Math.round(Math.min(Math.max(new Date((ws.getTime()+we.getTime())/2)-new Date(p.start),0),new Date(p.end)-new Date(p.start))/(new Date(p.end)-new Date(p.start))*100);
+  L.popup({maxWidth:220}).setLatLng([lat,lng]).setContent(
+    `<strong>${p.name}</strong>${p.manager?`<br><span style='font-size:.65rem;opacity:.75'>👤 ${p.manager}</span>`:''}
+    <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${PHASES[p.phase].label}</span><br>
+    ${p.type}<br>${p.start.slice(0,7)} – ${p.end.slice(0,7)}<br>
+    <div style="height:3px;background:#ffffff33;border-radius:2px;margin:5px 0 2px"><div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div></div>
+    <span style="font-size:.6rem;opacity:.7">${pct}% elapsed</span>`
+  ).openOn(map);
+}
+
+// ── VERTEX EDITING ────────────────────────────────────────────────────
+function showVertexHandles(){
+  vertexGroup.clearLayers();
+  const p=projects.find(x=>String(x.id)===String(editProjectId));if(!p)return;
+  p.shapes.forEach((s,si)=>{
+    if(s.type!=='polygon'||!s.latlngs)return;
+    s.latlngs.forEach((ll,vi)=>{
+      const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
+      const icon=L.divIcon({className:'',html:'<div class="vertex-handle"></div>',iconSize:[10,10],iconAnchor:[5,5]});
+      const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:2000}).addTo(vertexGroup);
+      vm.on('drag',function(e){
+        const nl=e.target.getLatLng();
+        s.latlngs[vi]=Array.isArray(s.latlngs[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
+        refreshMap();redraw();
+      });
+      vm.on('dragend',function(){
+        apiPost({action:'update',project:{...p}});
+      });
+    });
+  });
+}
+
+function hideVertexHandles(){vertexGroup.clearLayers();}
 const polygonGroup=L.layerGroup().addTo(map);
 
 function setBaseLayer(type,btn){
@@ -1056,6 +1153,7 @@ function openEditExtents(){
   document.getElementById('edit-phase').value = p.phase || 'construction';
   renderEditShapes();
   document.getElementById('editPanel').classList.add('show');
+  setTimeout(showVertexHandles, 100);
 }
 
 function renderEditShapes(){
@@ -1140,6 +1238,7 @@ function finishEditDraw(){
   map.dragging.enable();map.scrollWheelZoom.enable();
   refreshMap();renderEditShapes();redraw();
   document.getElementById('editPanel').classList.add('show');
+  showVertexHandles();
 }
 
 function closeEditPanel(save){
@@ -1160,6 +1259,7 @@ function closeEditPanel(save){
       showHint(`✓ "${p.name}" updated`,2500);
     }
   }
+  hideVertexHandles();
   document.getElementById('editPanel').classList.remove('show');
   editProjectId=null;editDrawing=false;editCurrentLLs=[];editDrawSection='extents';
   dc.style.pointerEvents='none';setTool('pan');
