@@ -425,7 +425,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
-
 const PHASES={charter:{label:'Charter',color:'#534AB7'},design:{label:'Design',color:'#1D9E75'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -507,7 +506,9 @@ function refreshMap(){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
-          fillOpacity:0,
+          // Regular extents: solid semi-transparent fill via Leaflet
+          // Staging/road: fill drawn as hatches on canvas, so Leaflet fill = 0
+          fillOpacity:isStaging||isRoad ? 0 : 0.18,
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         L.polygon(s.latlngs,polyOpts).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
