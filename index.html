@@ -148,7 +148,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill:hover{transform:scale(1.04);}
 .map-wrap{flex:1;position:relative;overflow:hidden;}
 #map{position:absolute;inset:0;}
-#drawCanvas{position:absolute;inset:0;z-index:450;pointer-events:none;}
+#drawCanvas{position:absolute;inset:0;z-index:300;pointer-events:none;}
 .proj-dot{width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;font-family:'Source Sans 3',sans-serif;}
 .proj-dot:hover{transform:scale(1.25);}
 .leaflet-popup-content-wrapper{background:rgba(4,30,66,.95);color:#fff;border-radius:6px;border-left:3px solid var(--gold);padding:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
@@ -505,10 +505,7 @@ function refreshMap(){
       } else if(s.type==='polygon'&&s.latlngs){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
         const polyOpts={color:col,weight:2.5,
-          fillColor:col,
-          // Regular extents: solid semi-transparent fill via Leaflet
-          // Staging/road: fill drawn as hatches on canvas, so Leaflet fill = 0
-          fillOpacity:isStaging||isRoad ? 0 : 0.18,
+          fillOpacity:0,  // all fills drawn on canvas
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         L.polygon(s.latlngs,polyOpts).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
@@ -607,8 +604,9 @@ function redraw(){
     const pcol=PHASES[p.phase]?.color||PHASES['construction'].color;
     p.shapes.forEach(s=>{
       if(s.type!=='polygon'||!s.latlngs)return;
-      if(s.isStagingArea) drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-diagonal');
-      else if(s.isRoadClosure) drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-cross');
+      if(s.isStagingArea)       drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-diagonal');
+      else if(s.isRoadClosure)  drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-cross');
+      else                      drawPolygonOnCanvas(s.latlngs,pcol,true,'solid');
     });
   });
 
