@@ -154,7 +154,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill:hover{transform:scale(1.04);}
 .map-wrap{flex:1;position:relative;overflow:hidden;}
 #map{position:absolute;inset:0;}
-#drawCanvas{position:absolute;inset:0;z-index:450;pointer-events:none;}
+#drawCanvas{position:absolute;inset:0;z-index:490;pointer-events:none;}
 .proj-dot{width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;font-family:'Source Sans 3',sans-serif;}
 .proj-dot:hover{transform:scale(1.25);}
 .leaflet-popup-content-wrapper{background:rgba(4,30,66,.95);color:#fff;border-radius:6px;border-left:3px solid var(--gold);padding:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
@@ -476,10 +476,10 @@ const streets=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZ
 const map=L.map('map',{center:[38.9072,-77.0741],zoom:17,layers:[satellite],doubleClickZoom:false});
 map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
 // Custom pane for polygons below canvas, popups stay above canvas at z:700
+// polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
 map.createPane('polygonPane');
-map.getPane('polygonPane').style.zIndex = 350;
-// Ensure popup pane is well above the canvas (450)
-map.getPane('popupPane').style.zIndex = 700;
+map.getPane('polygonPane').style.zIndex = 500;
+map.getPane('popupPane').style.zIndex   = 800;
 const markerGroup=L.layerGroup().addTo(map);
 const polygonGroup=L.layerGroup().addTo(map);
 
