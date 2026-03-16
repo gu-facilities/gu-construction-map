@@ -422,7 +422,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </div>
 
 <script>
-// ── GOOGLE SHEETS ─────────────────────────────────────────────────────
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
@@ -508,7 +507,7 @@ function refreshMap(){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
-          fillOpacity:isStaging||isRoad?0:0.18,
+          fillOpacity:0,  // all hatch fills drawn on canvas
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         const poly=L.polygon(s.latlngs,polyOpts).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
@@ -601,10 +600,11 @@ function redraw(){
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(ps>cutoff||pe<new Date(tlStart))return;
+    const pcol=PHASES[p.phase]?.color||PHASES['construction'].color;
     p.shapes.forEach(s=>{
       if(s.type!=='polygon'||!s.latlngs)return;
-      if(s.isStagingArea) drawPolygonOnCanvas(s.latlngs,PHASES['staging'].color,true,'hatch-diagonal');
-      else if(s.isRoadClosure) drawPolygonOnCanvas(s.latlngs,PHASES['road'].color,true,'hatch-cross');
+      if(s.isStagingArea) drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-diagonal');
+      else if(s.isRoadClosure) drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-cross');
     });
   });
 
@@ -615,10 +615,10 @@ function redraw(){
       if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
     wizStagingShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, PHASES['staging'].color, true, 'hatch-diagonal');
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-diagonal');
     });
     wizRoadShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, PHASES['road'].color, true, 'hatch-cross');
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-cross');
     });
   }
 
