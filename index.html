@@ -1329,17 +1329,18 @@ function rebuildVertexHandles(s, p, col){
       rebuildVertexHandles(s,p,col);
     });
 
-    // Wire the ✕ delete button via DOM after marker is added
+    // Wire the ✕ delete button — must stop propagation at mousedown level
+    // to prevent Leaflet's drag system from swallowing the event
     vm.on('add',function(){
       const el=vm.getElement();
       if(!el)return;
       const delBtn=el.querySelector('.v-del-btn');
       if(delBtn){
-        delBtn.addEventListener('mousedown',function(ev){
-          ev.stopPropagation();ev.preventDefault();
+        L.DomEvent.on(delBtn,'mousedown',function(ev){
+          L.DomEvent.stop(ev);
         });
-        delBtn.addEventListener('click',function(ev){
-          ev.stopPropagation();ev.preventDefault();
+        L.DomEvent.on(delBtn,'mouseup',function(ev){
+          L.DomEvent.stop(ev);
           if(lls.length<=3){showHint('A polygon needs at least 3 points',2000);return;}
           lls.splice(vi,1);
           refreshMap();
