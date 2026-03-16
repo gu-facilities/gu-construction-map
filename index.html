@@ -281,6 +281,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
     <div class="map-wrap" id="mapWrap">
       <canvas id="drawCanvas"></canvas>
       <div id="map"></div>
+      <div id="vtxOverlay" style="position:absolute;inset:0;pointer-events:none;z-index:1200;"></div>
       <div class="hint-toast" id="hintToast"></div>
     </div>
     <div class="tl-bar" style="flex-wrap:wrap;row-gap:0;">
@@ -731,7 +732,12 @@ function showVertexHandles(){
   });
 }
 
-function hideVertexHandles(){vertexGroup.clearLayers();}
+function hideVertexHandles(){
+  vertexGroup.clearLayers();
+  if(document.getElementById('vtxOverlay')) document.getElementById('vtxOverlay').innerHTML='';
+  vtxToolbar.classList.remove('show');
+  if(_vtxMoveHandler){map.off('move zoom',_vtxMoveHandler);_vtxMoveHandler=null;}
+}
 
 function setBaseLayer(type,btn){
   document.querySelectorAll('.ltbtn').forEach(b=>b.classList.remove('active'));
@@ -1304,7 +1310,10 @@ function editShapeVertices(shapeIndex){
     doneBtn.onclick=finishWizardDraw;
     document.getElementById('drawingBanner').classList.remove('show');
     vertexGroup.clearLayers();
-    _editShape=null;_editProject=null;_editVertexIdx=null;
+    vtxOverlay.innerHTML='';
+    vtxToolbar.classList.remove('show');
+    if(_vtxMoveHandler){map.off('move zoom',_vtxMoveHandler);_vtxMoveHandler=null;}
+    _editShape=null;_editProject=null;
     apiPost({action:'update',project:{...p}});
     document.getElementById('editPanel').classList.add('show');
     showVertexHandles();
@@ -1314,59 +1323,80 @@ function editShapeVertices(shapeIndex){
   try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[100,100],duration:.6});}catch(ex){}
 }
 
-// Vertex toolbar state
-let _vtxShape=null,_vtxProject=null,_vtxIdx=null,_vtxCol=null;
+// Vertex editing state
+let _vtxShape=null,_vtxProject=null,_vtxCol=null;
 const vtxToolbar=document.getElementById('vtxToolbar');
+const vtxOverlay=document.getElementById('vtxOverlay');
 document.addEventListener('click',function(e){
   if(!vtxToolbar.contains(e.target)) vtxToolbar.classList.remove('show');
 });
 
 function vtxDeleteSelected(){
   vtxToolbar.classList.remove('show');
-  if(!_vtxShape||_vtxIdx===null)return;
+  const vi=vtxToolbar._vi;
+  if(!_vtxShape||vi===null||vi===undefined)return;
   if(_vtxShape.latlngs.length<=3){showHint('A polygon needs at least 3 points',2000);return;}
-  _vtxShape.latlngs.splice(_vtxIdx,1);
-  _vtxIdx=null;
+  _vtxShape.latlngs.splice(vi,1);
   refreshMap();
   apiPost({action:'update',project:{..._vtxProject}});
   rebuildVertexHandles(_vtxShape,_vtxProject,_vtxCol);
 }
 
+function updateVtxOverlay(lls,col,s,p){
+  vtxOverlay.innerHTML='';
+  lls.forEach((ll,vi)=>{
+    const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
+    const pt=map.latLngToContainerPoint(latLng);
+    // Invisible right-click target sitting exactly over the Leaflet marker
+    const div=document.createElement('div');
+    div.style.cssText=`position:absolute;left:${pt.x-9}px;top:${pt.y-9}px;width:18px;height:18px;
+      border-radius:50%;cursor:context-menu;pointer-events:all;z-index:10;`;
+    div.title='Right-click to delete vertex';
+    div.addEventListener('contextmenu',function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      vtxToolbar._vi=vi;
+      vtxToolbar.style.left=(ev.clientX+4)+'px';
+      vtxToolbar.style.top=(ev.clientY+4)+'px';
+      vtxToolbar.classList.add('show');
+    });
+    vtxOverlay.appendChild(div);
+  });
+  // Also add midpoint click targets
+  lls.forEach((ll,vi)=>{
+    const nextIdx=(vi+1)%lls.length;
+    const ll1=Array.isArray(ll)?ll:[ll.lat,ll.lng];
+    const ll2=Array.isArray(lls[nextIdx])?lls[nextIdx]:[lls[nextIdx].lat,lls[nextIdx].lng];
+    const midLat=(ll1[0]+ll2[0])/2, midLng=(ll1[1]+ll2[1])/2;
+    const pt=map.latLngToContainerPoint(L.latLng(midLat,midLng));
+    const div=document.createElement('div');
+    div.style.cssText=`position:absolute;left:${pt.x-7}px;top:${pt.y-7}px;width:14px;height:14px;
+      cursor:crosshair;pointer-events:all;z-index:9;`;
+  });
+}
+
 function rebuildVertexHandles(s, p, col){
   _vtxShape=s; _vtxProject=p; _vtxCol=col;
   vertexGroup.clearLayers();
+  vtxOverlay.innerHTML='';
   const lls=s.latlngs;
 
-  // ── Vertex handles ────────────────────────────────────────────────
-  // Left-click: select vertex and show delete toolbar
-  // Drag: move vertex
+  // ── Leaflet markers for DRAGGING ──────────────────────────────────
   lls.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
     const icon=L.divIcon({
       className:'',
       html:`<div style="width:18px;height:18px;border-radius:50%;background:white;
-        border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
-        transition:transform .1s;" title="Drag to move · Click to select/delete"></div>`,
+        border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;"></div>`,
       iconSize:[18,18],iconAnchor:[9,9]
     });
     const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:5000,pane:'markerPane'}).addTo(vertexGroup);
-
-    vm.on('click',function(e){
-      L.DomEvent.stopPropagation(e);
-      // Show the floating toolbar near this vertex
-      _vtxIdx=vi;
-      const pt=map.latLngToContainerPoint(latLng);
-      const mapRect=map.getContainer().getBoundingClientRect();
-      vtxToolbar.style.left=(mapRect.left+pt.x+14)+'px';
-      vtxToolbar.style.top=(mapRect.top+pt.y-10)+'px';
-      vtxToolbar.classList.add('show');
-    });
-
     vm.on('drag',function(e){
       vtxToolbar.classList.remove('show');
       const nl=e.target.getLatLng();
       lls[vi]=Array.isArray(lls[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
       refreshMap();
+      updateVtxOverlay(lls,col,s,p);
     });
     vm.on('dragend',function(){
       apiPost({action:'update',project:{...p}});
@@ -1374,13 +1404,12 @@ function rebuildVertexHandles(s, p, col){
     });
   });
 
-  // ── Midpoint diamonds — click to insert a new vertex ─────────────
+  // ── Midpoint diamonds (Leaflet markers for visual + click) ────────
   lls.forEach((ll,vi)=>{
     const nextIdx=(vi+1)%lls.length;
     const ll1=Array.isArray(ll)?ll:[ll.lat,ll.lng];
     const ll2=Array.isArray(lls[nextIdx])?lls[nextIdx]:[lls[nextIdx].lat,lls[nextIdx].lng];
-    const midLat=(ll1[0]+ll2[0])/2;
-    const midLng=(ll1[1]+ll2[1])/2;
+    const midLat=(ll1[0]+ll2[0])/2, midLng=(ll1[1]+ll2[1])/2;
     const midIcon=L.divIcon({
       className:'',
       html:`<div class="midpoint-handle" style="border-color:${col};background:#fff3d4;"></div>`,
@@ -1396,7 +1425,16 @@ function rebuildVertexHandles(s, p, col){
       rebuildVertexHandles(s,p,col);
     });
   });
+
+  // ── HTML overlay for right-click delete (outside Leaflet's event system) ──
+  updateVtxOverlay(lls,col,s,p);
+
+  // Keep overlay in sync when map moves
+  map.off('move zoom',_vtxMoveHandler);
+  _vtxMoveHandler=function(){updateVtxOverlay(lls,col,s,p);};
+  map.on('move zoom',_vtxMoveHandler);
 }
+let _vtxMoveHandler=null;
 
 function startEditAddDraw(drawTool, section){
   editDrawTool=drawTool;
