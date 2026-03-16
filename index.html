@@ -174,12 +174,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .leaflet-popup-close-button{color:var(--gold) !important;font-size:16px !important;top:6px !important;right:8px !important;}
 .vertex-handle{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .1s;}
 .vertex-handle:hover{transform:scale(1.5);background:var(--gold);}
-.vertex-ctx{position:fixed;background:#fff;border:1px solid #dde2ea;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:9200;min-width:160px;overflow:hidden;display:none;}
-.vertex-ctx button{display:block;width:100%;padding:8px 14px;text-align:left;background:none;border:none;font-family:'Source Sans 3',sans-serif;font-size:.75rem;cursor:pointer;color:var(--navy);font-weight:600;border-bottom:1px solid #f0f2f5;}
-.vertex-ctx button:hover{background:#f5f8ff;}
-.vertex-ctx button:last-child{border-bottom:none;}
-.vertex-ctx button.danger{color:#c0304a;}
-.vertex-ctx button.danger:hover{background:#fff5f6;}
+/* vertex context menu removed — using inline delete buttons instead */
 /* Midpoint handle — smaller, diamond shape for adding vertices */
 .midpoint-handle{width:12px;height:12px;background:#fff3d4;border:2.5px solid var(--gold);transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:crosshair;opacity:0.85;}
 .midpoint-handle:hover{opacity:1;background:var(--gold);transform:rotate(45deg) scale(1.4);}
@@ -333,13 +328,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       </div>
     </div>
   </div>
-</div>
-
-<!-- VERTEX CONTEXT MENU -->
-<div class="vertex-ctx" id="vertexCtx">
-  <button onclick="addVertexBefore()">➕ Add point before</button>
-  <button onclick="addVertexAfter()">➕ Add point after</button>
-  <button class="danger" onclick="removeVertex()">✕ Remove point</button>
 </div>
 
 <!-- OVERLAP PICKER -->
@@ -1283,18 +1271,6 @@ function deleteShape(i){
 
 // Vertex editing state
 let _editShape=null, _editProject=null, _editVertexIdx=null;
-const vertexCtx=document.getElementById('vertexCtx');
-let _vertexCtxJustOpened=false;
-document.addEventListener('click',function(e){
-  if(_vertexCtxJustOpened){_vertexCtxJustOpened=false;return;}
-  if(!vertexCtx.contains(e.target)) vertexCtx.style.display='none';
-});
-document.addEventListener('contextmenu',function(e){
-  // Hide vertex ctx if clicking elsewhere
-  if(!vertexCtx.contains(e.target)&&vertexCtx.style.display==='block'){
-    vertexCtx.style.display='none';
-  }
-});
 
 function editShapeVertices(shapeIndex){
   vertexGroup.clearLayers();
@@ -1328,17 +1304,21 @@ function rebuildVertexHandles(s, p, col){
   vertexGroup.clearLayers();
   const lls=s.latlngs;
 
-  // ── Vertex handles (circles) ──────────────────────────────────────
+  // ── Vertex handles (circle + ✕ delete button) ─────────────────────
   lls.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
+    // Each handle is a circle with a small ✕ in the top-right corner
+    const canDelete=lls.length>3;
     const icon=L.divIcon({
       className:'',
-      html:`<div style="width:16px;height:16px;border-radius:50%;background:white;border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;"></div>`,
-      iconSize:[16,16],iconAnchor:[8,8]
+      html:`<div style="position:relative;width:18px;height:18px;">
+        <div style="width:18px;height:18px;border-radius:50%;background:white;border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;"></div>
+        ${canDelete?`<div class="v-del-btn" data-vi="${vi}" style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:50%;background:#c0304a;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.4);line-height:1;">✕</div>`:''}
+      </div>`,
+      iconSize:[18,18],iconAnchor:[9,9]
     });
     const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:5000,pane:'markerPane'}).addTo(vertexGroup);
 
-    // Drag to move
     vm.on('drag',function(e){
       const nl=e.target.getLatLng();
       lls[vi]=Array.isArray(lls[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
@@ -1349,23 +1329,28 @@ function rebuildVertexHandles(s, p, col){
       rebuildVertexHandles(s,p,col);
     });
 
-    // Right-click to show context menu — wire to the DOM element directly
+    // Wire the ✕ delete button via DOM after marker is added
     vm.on('add',function(){
       const el=vm.getElement();
       if(!el)return;
-      el.addEventListener('contextmenu',function(ev){
-        ev.preventDefault();
-        ev.stopPropagation();
-        _editVertexIdx=vi;
-        _vertexCtxJustOpened=true;
-        vertexCtx.style.display='block';
-        vertexCtx.style.left=(ev.clientX+4)+'px';
-        vertexCtx.style.top=(ev.clientY+4)+'px';
-      });
+      const delBtn=el.querySelector('.v-del-btn');
+      if(delBtn){
+        delBtn.addEventListener('mousedown',function(ev){
+          ev.stopPropagation();ev.preventDefault();
+        });
+        delBtn.addEventListener('click',function(ev){
+          ev.stopPropagation();ev.preventDefault();
+          if(lls.length<=3){showHint('A polygon needs at least 3 points',2000);return;}
+          lls.splice(vi,1);
+          refreshMap();
+          apiPost({action:'update',project:{...p}});
+          rebuildVertexHandles(s,p,col);
+        });
+      }
     });
   });
 
-  // ── Midpoint handles (diamonds) — click to add a vertex ──────────
+  // ── Midpoint diamonds — click to insert a new vertex ─────────────
   lls.forEach((ll,vi)=>{
     const nextIdx=(vi+1)%lls.length;
     const ll1=Array.isArray(ll)?ll:[ll.lat,ll.lng];
@@ -1380,53 +1365,12 @@ function rebuildVertexHandles(s, p, col){
     const mm=L.marker([midLat,midLng],{icon:midIcon,zIndexOffset:4000,pane:'markerPane'}).addTo(vertexGroup);
     mm.on('click',function(e){
       L.DomEvent.stopPropagation(e);
-      // Insert new vertex after vi
-      const newPt=[midLat,midLng];
-      lls.splice(nextIdx,0,newPt);
+      lls.splice(nextIdx,0,[midLat,midLng]);
       refreshMap();
       apiPost({action:'update',project:{...p}});
       rebuildVertexHandles(s,p,col);
     });
   });
-}
-
-function addVertexBefore(){
-  vertexCtx.style.display='none';
-  if(!_editShape||_editVertexIdx===null)return;
-  const lls=_editShape.latlngs;
-  const vi=_editVertexIdx;
-  const prevIdx=(vi-1+lls.length)%lls.length;
-  const ll1=Array.isArray(lls[prevIdx])?lls[prevIdx]:[lls[prevIdx].lat,lls[prevIdx].lng];
-  const ll2=Array.isArray(lls[vi])?lls[vi]:[lls[vi].lat,lls[vi].lng];
-  lls.splice(vi,0,[(ll1[0]+ll2[0])/2,(ll1[1]+ll2[1])/2]);
-  refreshMap();
-  apiPost({action:'update',project:{..._editProject}});
-  rebuildVertexHandles(_editShape,_editProject,PHASES[_editProject.phase]?.color||'#C9A96E');
-}
-
-function addVertexAfter(){
-  vertexCtx.style.display='none';
-  if(!_editShape||_editVertexIdx===null)return;
-  const lls=_editShape.latlngs;
-  const vi=_editVertexIdx;
-  const nextIdx=(vi+1)%lls.length;
-  const ll1=Array.isArray(lls[vi])?lls[vi]:[lls[vi].lat,lls[vi].lng];
-  const ll2=Array.isArray(lls[nextIdx])?lls[nextIdx]:[lls[nextIdx].lat,lls[nextIdx].lng];
-  lls.splice(vi+1,0,[(ll1[0]+ll2[0])/2,(ll1[1]+ll2[1])/2]);
-  refreshMap();
-  apiPost({action:'update',project:{..._editProject}});
-  rebuildVertexHandles(_editShape,_editProject,PHASES[_editProject.phase]?.color||'#C9A96E');
-}
-
-function removeVertex(){
-  vertexCtx.style.display='none';
-  if(!_editShape||_editVertexIdx===null)return;
-  if(_editShape.latlngs.length<=3){alert('A polygon must have at least 3 points.');return;}
-  _editShape.latlngs.splice(_editVertexIdx,1);
-  _editVertexIdx=null;
-  refreshMap();
-  apiPost({action:'update',project:{..._editProject}});
-  rebuildVertexHandles(_editShape,_editProject,PHASES[_editProject.phase]?.color||'#C9A96E');
 }
 
 function startEditAddDraw(drawTool, section){
