@@ -647,13 +647,13 @@ document.addEventListener('click',e=>{
 });
 
 function ptInPoly(lat,lng,lls){
+  if(!lls||!lls.length) return false;
   let inside=false;
+  function getLat(p){return Array.isArray(p)?p[0]:p.lat;}
+  function getLng(p){return Array.isArray(p)?p[1]:p.lng;}
   for(let i=0,j=lls.length-1;i<lls.length;j=i++){
-    // Accept array [lat,lng], object {lat,lng}, or Leaflet LatLng
-    const xi=Array.isArray(lls[i])?lls[i][0]:lls[i].lat;
-    const yi=Array.isArray(lls[i])?lls[i][1]:lls[i].lng;
-    const xj=Array.isArray(lls[j])?lls[j][0]:lls[j].lat;
-    const yj=Array.isArray(lls[j])?lls[j][1]:lls[j].lng;
+    const xi=getLat(lls[i]), yi=getLng(lls[i]);
+    const xj=getLat(lls[j]), yj=getLng(lls[j]);
     if(((yi>lng)!=(yj>lng))&&(lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
   }
   return inside;
@@ -806,19 +806,30 @@ function refreshMap(){
 
 // ── MAP CLICK: handles all polygon clicks + overlap detection ───────
 map.on('click',function(e){
-  if(_vtxShape) return; // don't interfere with vertex editing
+  if(_vtxShape) return;
   const lat=e.latlng.lat, lng=e.latlng.lng;
   const matches=[];
+
+  // Check all rendered polygons regardless of phase/type filter
   polygonGroup.eachLayer(function(layer){
-    if(layer._projectId&&layer._popContent){
-      const lls=layer.getLatLngs()[0];
-      if(lls&&ptInPoly(lat,lng,lls.map(ll=>ll))){
-        if(!matches.find(m=>m.id===layer._projectId)){
-          matches.push({id:layer._projectId,pop:layer._popContent});
-        }
+    if(!layer._projectId||!layer._popContent) return;
+    // getLatLngs() returns array of rings; flatten one level if needed
+    let ring=layer.getLatLngs();
+    if(ring.length&&Array.isArray(ring[0])) ring=ring[0];
+    else if(ring.length&&ring[0] instanceof Array) ring=ring[0];
+    // Handle both flat [LatLng,...] and nested [[LatLng,...]]
+    if(ring.length&&(ring[0] instanceof L.LatLng||ring[0].lat!==undefined)){
+      // already flat ring of LatLng objects
+    } else if(ring.length&&Array.isArray(ring[0])){
+      ring=ring[0]; // unwrap one more level
+    }
+    if(ptInPoly(lat,lng,ring)){
+      if(!matches.find(m=>m.id===layer._projectId)){
+        matches.push({id:layer._projectId,pop:layer._popContent});
       }
     }
   });
+
   if(!matches.length) return;
   if(matches.length===1){
     L.popup({maxWidth:220}).setLatLng(e.latlng).setContent(matches[0].pop).openOn(map);
