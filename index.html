@@ -249,26 +249,33 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <canvas id="drawCanvas"></canvas>
       <div class="hint-toast" id="hintToast"></div>
     </div>
-    <div class="tl-bar">
-      <label>📅</label>
-      <div class="tl-controls">
-        <button class="play-btn" id="playBtn" onclick="togglePlay()" title="Play/Pause">▶</button>
-        <select class="speed-sel" id="speedSel">
-          <option value="1">1×</option>
-          <option value="1.5">1.5×</option>
-          <option value="2">2×</option>
-        </select>
-        <select class="yr-sel" id="yrRange" onchange="buildTimeline()">
-          <option value="3">3 Yrs</option>
-          <option value="5" selected>5 Yrs</option>
-        </select>
+    <div class="tl-bar" style="flex-wrap:wrap;row-gap:0;">
+      <!-- Row 1: play + speed + yrs + All Projects + timeline scroll -->
+      <div style="display:flex;align-items:center;gap:7px;width:100%;padding-bottom:4px;">
+        <label>📅</label>
+        <div class="tl-controls">
+          <button class="play-btn" id="playBtn" onclick="togglePlay()" title="Play/Pause">▶</button>
+          <select class="speed-sel" id="speedSel">
+            <option value="1">1×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+          <select class="yr-sel" id="yrRange" onchange="buildTimeline()">
+            <option value="3">3 Yrs</option>
+            <option value="5" selected>5 Yrs</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:#667;cursor:pointer;white-space:nowrap;user-select:none;margin-left:2px;">
+            <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
+              style="accent-color:var(--navy);width:14px;height:14px;cursor:pointer;">
+            All Projects
+          </label>
+        </div>
+        <div class="tl-scroll" id="tlScroll">
+          <div class="tl-track" id="tlTrack"></div>
+        </div>
       </div>
-      <label style="display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:#667;cursor:pointer;white-space:nowrap;user-select:none;flex-shrink:0;">
-        <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
-          style="accent-color:var(--navy);width:14px;height:14px;cursor:pointer;">
-        All projects
-      </label>
-      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;border-left:1px solid #e4e8ee;padding-left:8px;">
+      <!-- Row 2: Window pickers -->
+      <div style="display:flex;align-items:center;gap:8px;width:100%;padding-top:4px;border-top:1px solid #f0f2f5;">
         <span style="font-size:.63rem;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">Window</span>
         <input type="month" id="filterStartInput" title="Start month" onchange="setFilterWindow()"
           style="padding:2px 5px;font-family:'Source Sans 3',sans-serif;font-size:.68rem;border:1px solid #dde2ea;border-radius:4px;color:var(--navy);cursor:pointer;">
@@ -277,9 +284,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           style="padding:2px 5px;font-family:'Source Sans 3',sans-serif;font-size:.68rem;border:1px solid #dde2ea;border-radius:4px;color:var(--navy);cursor:pointer;">
         <button onclick="clearFilterWindow()" title="Clear window"
           style="background:none;border:none;font-size:.75rem;color:#a0aab8;cursor:pointer;padding:0 2px;opacity:0.3;" id="clearWinBtn">✕</button>
-      </div>
-      <div class="tl-scroll" id="tlScroll">
-        <div class="tl-track" id="tlTrack"></div>
       </div>
     </div>
     <div class="stats">
