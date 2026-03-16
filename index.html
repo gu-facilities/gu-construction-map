@@ -163,7 +163,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill:hover{transform:scale(1.04);}
 .map-wrap{flex:1;position:relative;overflow:hidden;}
 #map{position:absolute;inset:0;}
-#drawCanvas{position:absolute;top:0;left:0;z-index:450;pointer-events:none;}
+#drawCanvas{position:absolute;inset:0;z-index:399;pointer-events:none;}
 .proj-dot{width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;}
 .proj-dot:hover{transform:scale(1.25);}
 .leaflet-popup-content-wrapper{background:rgba(4,30,66,.95);color:#fff;border-radius:6px;border-left:3px solid var(--gold);padding:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
@@ -253,8 +253,8 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <button onclick="finishWizardDraw()">✓ Done Drawing</button>
     </div>
     <div class="map-wrap" id="mapWrap">
+      <canvas id="drawCanvas"></canvas>
       <div id="map"></div>
-      <!-- canvas appended to Leaflet container via JS for correct stacking -->
       <div class="hint-toast" id="hintToast"></div>
     </div>
     <div class="tl-bar" style="flex-wrap:wrap;row-gap:0;">
@@ -313,7 +313,8 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 
 <!-- CONTEXT MENU -->
 <div class="ctx-menu" id="ctxMenu">
-  <button onclick="openEditExtents()">✏️ Edit Project</button>
+  <button onclick="openEditInfo()">✏️ Edit Project Info</button>
+  <button onclick="openEditExtents()">🗺 Edit Project Extents</button>
   <button class="danger" onclick="confirmRemoveProject()">🗑 Remove Project</button>
 </div>
 
@@ -588,16 +589,21 @@ map.on('popupopen', function(e) {
 // Custom pane for polygons below canvas, popups stay above canvas at z:700
 // polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
 map.createPane('polygonPane');
-map.getPane('polygonPane').style.zIndex = 500;
-map.getPane('popupPane').style.zIndex   = 1000;
-map.getPane('tooltipPane').style.zIndex = 900;
+map.getPane('polygonPane').style.zIndex = 450;  // above canvas(399), below popup
+map.getPane('popupPane').style.zIndex   = 700;  // Leaflet default, above everything
+// Remove overflow hidden on popup pane so popups aren't clipped
 map.getPane('popupPane').style.overflow = 'visible';
 const markerGroup=L.layerGroup().addTo(map);
 const vertexGroup=L.layerGroup().addTo(map);
 
 // ── OVERLAP SELECTOR ─────────────────────────────────────────────────
 const overlapMenu=document.getElementById('overlapMenu');
-document.addEventListener('click',e=>{if(!overlapMenu.contains(e.target))overlapMenu.style.display='none';});
+// Close overlap menu on next click outside it (use setTimeout to avoid same-event close)
+document.addEventListener('click',e=>{
+  if(overlapMenu.style.display==='block'&&!overlapMenu.contains(e.target)){
+    overlapMenu.style.display='none';
+  }
+});
 
 function ptInPoly(lat,lng,lls){
   let inside=false;
@@ -626,15 +632,19 @@ function getProjectsAt(lat,lng){
 
 map.on('click',function(e){
   const hits=getProjectsAt(e.latlng.lat,e.latlng.lng);
-  if(hits.length<2)return;
+  if(hits.length<2)return; // single project handled by Leaflet polygon popup
+  // Multiple overlapping — stop Leaflet from opening individual popups
+  e.originalEvent.stopPropagation();
   document.getElementById('overlapItems').innerHTML=hits.map(p=>{
     const col=PHASES[p.phase]?.color||'#888';
-    return `<div class="overlap-item" onclick="showProjectPopup('${p.id}',${e.latlng.lat},${e.latlng.lng});overlapMenu.style.display='none'">
+    return `<div class="overlap-item" onclick="showProjectPopup('${p.id}',${e.latlng.lat},${e.latlng.lng});document.getElementById('overlapMenu').style.display='none'">
       <div class="overlap-dot" style="background:${col}"></div>${p.name}</div>`;
   }).join('');
   overlapMenu.style.display='block';
-  overlapMenu.style.left=e.originalEvent.clientX+'px';
-  overlapMenu.style.top=e.originalEvent.clientY+'px';
+  overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
+  overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
+  // Prevent immediate close
+  e.originalEvent._overlapHandled=true;
 });
 
 function showProjectPopup(id,lat,lng){
@@ -721,18 +731,9 @@ function refreshMap(){
 }
 
 // ── CANVAS ──────────────────────────────────────────────────────────
-// Create canvas and append inside Leaflet container so z-index is relative to map panes
-const dc=document.createElement('canvas');
-dc.id='drawCanvas';
-document.getElementById('drawCanvas')?.remove();
-map.getContainer().appendChild(dc);
-dc.style.cssText='position:absolute;top:0;left:0;z-index:450;pointer-events:none;';
+const dc=document.getElementById('drawCanvas');
 const ctx=dc.getContext('2d');
-function syncCanvas(){
-  const mc=map.getContainer();
-  dc.width=mc.offsetWidth;dc.height=mc.offsetHeight;
-  dc.style.width=mc.offsetWidth+'px';dc.style.height=mc.offsetHeight+'px';
-}
+function syncCanvas(){const r=document.getElementById('mapWrap').getBoundingClientRect();dc.width=r.width;dc.height=r.height;}
 syncCanvas();
 window.addEventListener('resize',()=>{syncCanvas();redraw();});
 map.on('move zoom moveend zoomend resize',redraw);
@@ -1133,6 +1134,16 @@ function saveProject(){
 }
 
 // ── EDIT EXTENTS ────────────────────────────────────────────────────
+function openEditInfo(){
+  // Open edit modal focused on project details (not extents)
+  openEditExtents();
+  // Scroll to top of modal after open
+  setTimeout(()=>{
+    const modal=document.querySelector('.edit-modal');
+    if(modal) modal.scrollTop=0;
+  },150);
+}
+
 function openEditExtents(){
   ctxMenu.style.display='none';
   editProjectId=contextProjectId;
