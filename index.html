@@ -1377,7 +1377,10 @@ function updateVtxOverlay(lls,col,s,p){
 
 function rebuildVertexHandles(s, p, col){
   _vtxShape=s; _vtxProject=p; _vtxCol=col;
+  // Remove and re-add vertexGroup to ensure drag works after layer clear
+  map.removeLayer(vertexGroup);
   vertexGroup.clearLayers();
+  vertexGroup.addTo(map);
   vtxOverlay.innerHTML='';
   const lls=s.latlngs;
 
