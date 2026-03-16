@@ -162,6 +162,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill.on{opacity:1;}
 .spill:hover{transform:scale(1.04);}
 .map-wrap{flex:1;position:relative;overflow:hidden;}
+.leaflet-popup-pane{overflow:visible!important;}
 #map{position:absolute;inset:0;}
 #drawCanvas{position:absolute;inset:0;z-index:450;pointer-events:none;}
 .proj-dot{width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;}
@@ -301,6 +302,14 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <div class="stat"><strong id="s-plan">0</strong>Planning</div>
 
       <div class="mleg" id="miniLegend"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:8px;padding-left:8px;border-left:1px solid #ddd8cc;flex-shrink:0;">
+        <span style="font-size:.6rem;color:#778;display:flex;align-items:center;gap:4px;">
+          <svg width="22" height="8"><rect x="1" y="1" width="20" height="6" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3"/></svg>Staging
+        </span>
+        <span style="font-size:.6rem;color:#778;display:flex;align-items:center;gap:4px;">
+          <svg width="22" height="8"><rect x="1" y="1" width="20" height="6" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="6,4"/></svg>Road
+        </span>
+      </div>
     </div>
   </div>
 </div>
@@ -592,7 +601,6 @@ map.getPane('polygonPane').style.zIndex = 400;   // below canvas(450)
 // Popup pane: Leaflet default is 700, well above canvas
 map.getPane('popupPane').style.zIndex   = 700;
 map.getPane('popupPane').style.overflow = 'visible';
-// markerPane above canvas so pin dots are visible
 map.getPane('markerPane').style.zIndex  = 600;
 const markerGroup=L.layerGroup().addTo(map);
 const vertexGroup=L.layerGroup().addTo(map);
@@ -848,23 +856,7 @@ function redraw(){
   ctx.clearRect(0,0,dc.width,dc.height);
   const col=PHASES[currentPhase].color;
 
-  // ── Saved project hatch fills (staging/road polygons) ─────────
-  // Use same date window as refreshMap
-  const _ws2=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
-  const _we2=filterEnd||(()=>{const d=new Date(_ws2);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
-  const _smStart=_ws2,_smEnd=_we2;
-  projects.forEach(p=>{
-    if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
-    const ps=new Date(p.start),pe=new Date(p.end);
-    if(!showAllProjects&&(ps>_smEnd||pe<_smStart))return;
-    const pcol=PHASES[p.phase]?.color||PHASES['construction'].color;
-    p.shapes.forEach(s=>{
-      if(s.type!=='polygon'||!s.latlngs)return;
-      // Only draw hatches on canvas — solid extents handled by Leaflet polygon fill
-      if(s.isStagingArea)      drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-diagonal');
-      else if(s.isRoadClosure) drawPolygonOnCanvas(s.latlngs,pcol,true,'hatch-cross');
-    });
-  });
+  // Hatch fills removed — Leaflet handles all polygon fills directly
 
   // ── Committed wizard shapes (extent + staging) ──────────────────
   if(wizardOpen){
@@ -873,10 +865,10 @@ function redraw(){
       if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
     wizStagingShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-diagonal');
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
     wizRoadShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-cross');
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
   }
 
