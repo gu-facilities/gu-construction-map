@@ -207,6 +207,18 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 .mleg-i{display:flex;align-items:center;gap:3px;font-size:.58rem;color:#778;}
 .mleg-d{width:8px;height:8px;border-radius:2px;}
 </style>
+
+<svg style="position:absolute;width:0;height:0;overflow:hidden;">
+  <defs>
+    <pattern id="hatch-staging" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="STAGING_COLOR" stroke-width="2.5" stroke-opacity="0.7"/>
+    </pattern>
+    <pattern id="hatch-road" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="ROAD_COLOR" stroke-width="2.5" stroke-opacity="0.7"/>
+      <line x1="0" y1="0" x2="8" y2="0" stroke="ROAD_COLOR" stroke-width="2.5" stroke-opacity="0.7"/>
+    </pattern>
+  </defs>
+</svg>
 </head>
 <body>
 <header>
@@ -741,6 +753,25 @@ function refreshMap(){
         const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
         poly._projectId=p.id;
         poly._popContent=pop;
+        // Apply SVG hatch pattern fill for staging/road
+        if(isStaging||isRoad){
+          const uid='pat_'+Math.random().toString(36).slice(2,7);
+          const defs=document.querySelector('#hatch-staging').closest('defs');
+          // Create a unique pattern for this polygon with the correct color
+          const template=document.getElementById(isStaging?'hatch-staging':'hatch-road');
+          const clone=template.cloneNode(true);
+          clone.id=uid;
+          clone.querySelectorAll('line').forEach(l=>l.setAttribute('stroke',col));
+          defs.appendChild(clone);
+          poly.on('add',function(){
+            const el=poly.getElement();
+            if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
+          });
+          setTimeout(()=>{
+            const el=poly.getElement();
+            if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
+          },50);
+        }
         poly.on('click',function(e){
           L.DomEvent.stopPropagation(e);
           // Find ALL polygons that contain this click point
