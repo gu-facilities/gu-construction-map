@@ -298,6 +298,8 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <div class="fields-grid">
         <div class="wf full"><label>Project Name</label>
           <input type="text" id="wiz-name" placeholder="e.g. White-Gravenor Hall Renovation"></div>
+        <div class="wf full"><label>Project Manager</label>
+          <input type="text" id="wiz-manager" placeholder="e.g. Jane Smith"></div>
         <div class="wf"><label>Project Type</label>
           <select id="wiz-type">
             <option>New Construction (Building, Structure, etc.)</option>
@@ -470,7 +472,7 @@ function refreshMap(){
     const col=PHASES[p.phase].color;
     const midMonth=new Date((selMonthStart.getTime()+selMonthEnd.getTime())/2);
     const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
-    const pop=`<strong>${p.name}</strong>
+    const pop=`<strong>${p.name}</strong>${p.manager?`<br><span style='font-size:.65rem;opacity:.75'>👤 ${p.manager}</span>`:''}
       <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${PHASES[p.phase].label}</span><br>
       ${p.type}<br>${p.start.slice(0,7)} – ${p.end.slice(0,7)}<br>
       <div style="height:3px;background:#ffffff33;border-radius:2px;margin:5px 0 2px"><div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div></div>
@@ -480,7 +482,17 @@ function refreshMap(){
         const icon=L.divIcon({className:'',html:`<div class="proj-dot" style="background:${col}">${p.id}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
         L.marker([s.lat,s.lng],{icon}).bindPopup(pop,{maxWidth:220}).addTo(markerGroup);
       } else if(s.type==='polygon'&&s.latlngs){
-        L.polygon(s.latlngs,{color:col,fillColor:col,fillOpacity:.18,weight:2.5}).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
+        const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
+        const polyOpts={color:col,weight:2.5,
+          fillColor:col,
+          fillOpacity:isStaging||isRoad?0:0.18,
+          dashArray:isRoad?'8,6':isStaging?'4,4':null
+        };
+        const poly=L.polygon(s.latlngs,polyOpts).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
+        // For staging/road, draw hatch fill on canvas overlay
+        if(isStaging||isRoad){
+          poly.on('add',()=>{ setTimeout(redraw,50); });
+        }
       }
     });
   });
@@ -496,16 +508,62 @@ map.on('move zoom moveend zoomend resize',redraw);
 function llToXY(lat,lng){const p=map.latLngToContainerPoint(L.latLng(lat,lng));return[p.x,p.y];}
 function xyToLL(x,y){const ll=map.containerPointToLatLng(L.point(x,y));return[ll.lat,ll.lng];}
 
-function drawPolygonOnCanvas(latlngs, col, closed, dashed){
+function drawPolygonOnCanvas(latlngs, col, closed, fillType){
+  // fillType: 'solid' | 'hatch-diagonal' | 'hatch-cross' | false
   if(!latlngs||!latlngs.length) return;
   const pts=latlngs.map(ll=>llToXY(ll[0],ll[1]));
+
+  // Draw outline
   ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
   pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
   if(closed) ctx.closePath();
-  if(dashed) ctx.setLineDash([6,4]); else ctx.setLineDash([]);
-  ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);
-  if(closed){ctx.fillStyle=col+'28';ctx.fill();}
-  // vertex dots
+  ctx.setLineDash([]);
+  ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();
+
+  // Fill based on type
+  if(closed && fillType) {
+    if(fillType==='solid'){
+      ctx.fillStyle=col+'28';ctx.fill();
+    } else if(fillType==='hatch-diagonal' || fillType==='hatch-cross'){
+      // Clip to polygon shape then draw hatch lines
+      ctx.save();
+      ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+      pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
+      ctx.closePath();ctx.clip();
+
+      // Get bounding box of polygon
+      const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+      const minX=Math.min(...xs)-10, maxX=Math.max(...xs)+10;
+      const minY=Math.min(...ys)-10, maxY=Math.max(...ys)+10;
+      const span=Math.max(maxX-minX, maxY-minY);
+
+      ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=0.55;
+      const gap=10; // spacing between hatch lines
+
+      // Diagonal lines (45°) for staging
+      ctx.beginPath();
+      for(let d=-(span);d<span*2;d+=gap){
+        ctx.moveTo(minX+d, minY);
+        ctx.lineTo(minX+d+span, minY+span);
+      }
+      ctx.stroke();
+
+      // Cross hatch (second set of lines at -45°) for road closure
+      if(fillType==='hatch-cross'){
+        ctx.beginPath();
+        for(let d=-(span);d<span*2;d+=gap){
+          ctx.moveTo(minX+d+span, minY);
+          ctx.lineTo(minX+d, minY+span);
+        }
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha=1.0;
+      ctx.restore();
+    }
+  }
+
+  // Vertex dots
   pts.forEach(p=>{ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();});
 }
 
@@ -513,17 +571,31 @@ function redraw(){
   ctx.clearRect(0,0,dc.width,dc.height);
   const col=PHASES[currentPhase].color;
 
+  // ── Saved project hatch fills (staging/road polygons) ─────────
+  const now=new Date(),cutoff=new Date(tlStart);
+  cutoff.setMonth(cutoff.getMonth()+tlSelectedMonth+1);
+  projects.forEach(p=>{
+    if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
+    const ps=new Date(p.start),pe=new Date(p.end);
+    if(ps>cutoff||pe<new Date(tlStart))return;
+    p.shapes.forEach(s=>{
+      if(s.type!=='polygon'||!s.latlngs)return;
+      if(s.isStagingArea) drawPolygonOnCanvas(s.latlngs,PHASES['staging'].color,true,'hatch-diagonal');
+      else if(s.isRoadClosure) drawPolygonOnCanvas(s.latlngs,PHASES['road'].color,true,'hatch-cross');
+    });
+  });
+
   // ── Committed wizard shapes (extent + staging) ──────────────────
   if(wizardOpen){
     const wizCol=PHASES[document.getElementById('wiz-phase')?.value||'construction'].color;
     wizExtentShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, false);
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
     wizStagingShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, PHASES['staging'].color, true, false);
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, PHASES['staging'].color, true, 'hatch-diagonal');
     });
     wizRoadShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, PHASES['road'].color, true, false);
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, PHASES['road'].color, true, 'hatch-cross');
     });
   }
 
@@ -658,7 +730,7 @@ dc.addEventListener('dblclick',e=>{
 function openWizard(){
   wizardOpen=true;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
   wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizRoadShapes=[];stagingYN=false;roadYN=false;
-  document.getElementById('wiz-name').value='';document.getElementById('wiz-desc').value='';
+  document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
   document.getElementById('wiz-start').value='';document.getElementById('wiz-end').value='';
   document.getElementById('drawnExtents').innerHTML='';document.getElementById('drawnStaging').innerHTML='';document.getElementById('drawnRoad').innerHTML='';
   document.getElementById('stagingDrawTools').style.display='none';document.getElementById('roadDrawTools').style.display='none';
@@ -791,7 +863,8 @@ function saveProject(){
   if(!name){alert('Please enter a project name.');return;}
   if(!wizExtentShapes.length){alert('Please mark at least one project extent (pin or area) on the map.');return;}
   const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
-  const p={id:nextId++,name,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
+  const manager=document.getElementById('wiz-manager').value.trim();
+  const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:document.getElementById('wiz-start').value||new Date().toISOString().slice(0,10),end:document.getElementById('wiz-end').value||new Date(Date.now()+365*86400000).toISOString().slice(0,10),desc:document.getElementById('wiz-desc').value.trim(),shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
   showHint(`Saving "${p.name}"…`,1500);
@@ -993,6 +1066,7 @@ function buildProjectsHTML(){
       <span class="badge" style="background:${col}">${PHASES[p.phase].label}</span>
       <div class="pname">${p.name}</div>
       <div class="pmeta">${p.type} · ${p.start.slice(0,7)} – ${p.end.slice(0,7)}</div>
+      ${p.manager?`<div class="pmeta" style="color:#6a8aaa">👤 ${p.manager}</div>`:''}
       <div class="pbar"><div class="pbar-fill" style="width:${pct}%;background:${col}"></div></div>
       <div class="pct">${pct}% elapsed</div>
       <div class="phase-change-row"><label>Change phase:</label>
@@ -1022,7 +1096,6 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 // ── INIT ────────────────────────────────────────────────────────────
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 buildTimeline();
-
 (async()=>{
   showHint('Loading projects…',0);
   const loaded=await apiGet();
