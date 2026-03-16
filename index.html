@@ -596,6 +596,7 @@ map.getPane('popupPane').style.overflow = 'visible';
 map.getPane('markerPane').style.zIndex  = 600;
 const markerGroup=L.layerGroup().addTo(map);
 const vertexGroup=L.layerGroup().addTo(map);
+const polygonGroup=L.layerGroup().addTo(map);
 
 // ── OVERLAP SELECTOR ─────────────────────────────────────────────────
 const overlapMenu=document.getElementById('overlapMenu');
@@ -609,8 +610,11 @@ document.addEventListener('click',e=>{
 function ptInPoly(lat,lng,lls){
   let inside=false;
   for(let i=0,j=lls.length-1;i<lls.length;j=i++){
-    const [xi,yi]=Array.isArray(lls[i])?lls[i]:[lls[i].lat,lls[i].lng];
-    const [xj,yj]=Array.isArray(lls[j])?lls[j]:[lls[j].lat,lls[j].lng];
+    // Accept array [lat,lng], object {lat,lng}, or Leaflet LatLng
+    const xi=Array.isArray(lls[i])?lls[i][0]:lls[i].lat;
+    const yi=Array.isArray(lls[i])?lls[i][1]:lls[i].lng;
+    const xj=Array.isArray(lls[j])?lls[j][0]:lls[j].lat;
+    const yj=Array.isArray(lls[j])?lls[j][1]:lls[j].lng;
     if(((yi>lng)!=(yj>lng))&&(lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
   }
   return inside;
@@ -690,7 +694,6 @@ function showVertexHandles(){
 }
 
 function hideVertexHandles(){vertexGroup.clearLayers();}
-const polygonGroup=L.layerGroup().addTo(map);
 
 function setBaseLayer(type,btn){
   document.querySelectorAll('.ltbtn').forEach(b=>b.classList.remove('active'));
@@ -728,9 +731,43 @@ function refreshMap(){
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
-        poly.bindPopup(pop,{maxWidth:220});
+        poly._projectId=p.id;
+        poly._popContent=pop;
         poly.on('click',function(e){
-          if(!handlePolyClick(e,p.id)) poly.openPopup();
+          L.DomEvent.stopPropagation(e);
+          // Find ALL polygons that contain this click point
+          const lat=e.latlng.lat, lng=e.latlng.lng;
+          const matches=[];
+          polygonGroup.eachLayer(function(layer){
+            if(layer._projectId && layer._popContent){
+              const lls=layer.getLatLngs()[0];
+              if(lls && ptInPoly(lat,lng,lls.map(p=>p))){
+                if(!matches.find(m=>m.id===layer._projectId)){
+                  matches.push({id:layer._projectId,pop:layer._popContent});
+                }
+              }
+            }
+          });
+          if(matches.length>1){
+            // Show picker menu
+            const items=matches.map(m=>{
+              const proj=projects.find(x=>String(x.id)===String(m.id));
+              const col=PHASES[proj?.phase]?.color||'#888';
+              return `<div class="overlap-item" onclick="
+                L.popup({maxWidth:220}).setLatLng([${lat},${lng}]).setContent(this.dataset.pop).openOn(map);
+                document.getElementById('overlapMenu').style.display='none';
+              " data-pop="${m.pop.replace(/"/g,'&quot;')}">
+                <div class="overlap-dot" style="background:${col}"></div>
+                ${proj?.name||'Unknown'}
+              </div>`;
+            }).join('');
+            document.getElementById('overlapItems').innerHTML=items;
+            overlapMenu.style.display='block';
+            overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
+            overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
+          } else {
+            L.popup({maxWidth:220}).setLatLng(e.latlng).setContent(pop).openOn(map);
+          }
         });
       }
     });
@@ -1188,7 +1225,10 @@ function renderEditShapes(){
     if(!arr.length) return `<p style="font-size:.68rem;color:#bbb;padding:3px 0">${emptyMsg}</p>`;
     return arr.map(({s,i})=>`<div class="shape-row">
       <span class="shape-lbl">${s.type==='pin'?'📍 Pin':'⬡ Area'} ${i+1}</span>
-      <button class="btn-del-shape" onclick="deleteShape(${i})">🗑 Delete</button>
+      <div style="display:flex;gap:5px;">
+        ${s.type==='polygon'?`<button class="btn-del-shape" style="background:#e8f0ff;color:var(--navy);" onclick="editShapeVertices(${i})">✏️ Edit</button>`:''}
+        <button class="btn-del-shape" onclick="deleteShape(${i})">🗑 Delete</button>
+      </div>
     </div>`).join('');
   }
   document.getElementById('editExtentsList').innerHTML = buildList(extents,'No extents yet');
@@ -1199,7 +1239,34 @@ function renderEditShapes(){
 function deleteShape(i){
   const p=projects.find(x=>x.id===editProjectId);if(!p)return;
   p.shapes.splice(i,1);
-  renderEditShapes();refreshMap();
+  renderEditShapes();refreshMap();showVertexHandles();
+}
+
+function editShapeVertices(shapeIndex){
+  // Highlight which shape is being edited by showing only its handles
+  vertexGroup.clearLayers();
+  const p=projects.find(x=>String(x.id)===String(editProjectId));if(!p)return;
+  const s=p.shapes[shapeIndex];
+  if(!s||s.type!=='polygon'||!s.latlngs)return;
+  const col=PHASES[p.phase]?.color||'#C9A96E';
+  s.latlngs.forEach((ll,vi)=>{
+    const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
+    const icon=L.divIcon({className:'',
+      html:`<div class="vertex-handle" style="border-color:${col};"></div>`,
+      iconSize:[12,12],iconAnchor:[6,6]});
+    const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:3000}).addTo(vertexGroup);
+    vm.on('drag',function(e){
+      const nl=e.target.getLatLng();
+      s.latlngs[vi]=Array.isArray(s.latlngs[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
+      refreshMap();redraw();
+    });
+    vm.on('dragend',function(){
+      apiPost({action:'update',project:{...p}});
+    });
+  });
+  // Fly to the shape
+  try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[60,60],duration:.5});}catch(e){}
+  showHint('Drag the handles to reshape · Click ✓ Save Changes when done',4000);
 }
 
 function startEditAddDraw(drawTool, section){
