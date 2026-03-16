@@ -796,48 +796,47 @@ function refreshMap(){
             if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
           },50);
         }
-        poly.on('click',function(e){
-          L.DomEvent.stopPropagation(e);
-          // Find ALL polygons that contain this click point
-          const lat=e.latlng.lat, lng=e.latlng.lng;
-          const matches=[];
-          polygonGroup.eachLayer(function(layer){
-            if(layer._projectId && layer._popContent){
-              const lls=layer.getLatLngs()[0];
-              if(lls && ptInPoly(lat,lng,lls.map(p=>p))){
-                if(!matches.find(m=>m.id===layer._projectId)){
-                  matches.push({id:layer._projectId,pop:layer._popContent});
-                }
-              }
-            }
-          });
-          if(matches.length>1){
-            // Show picker menu
-            const items=matches.map(m=>{
-              const proj=projects.find(x=>String(x.id)===String(m.id));
-              const col=PHASES[proj?.phase]?.color||'#888';
-              return `<div class="overlap-item" onclick="
-                L.popup({maxWidth:220}).setLatLng([${lat},${lng}]).setContent(this.dataset.pop).openOn(map);
-                document.getElementById('overlapMenu').style.display='none';
-              " data-pop="${m.pop.replace(/"/g,'&quot;')}">
-                <div class="overlap-dot" style="background:${col}"></div>
-                ${proj?.name||'Unknown'}
-              </div>`;
-            }).join('');
-            document.getElementById('overlapItems').innerHTML=items;
-            overlapMenu.style.display='block';
-            overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
-            overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
-          } else {
-            L.popup({maxWidth:220}).setLatLng(e.latlng).setContent(pop).openOn(map);
-          }
-        });
+        // click handled by map.on('click') below
       }
     });
   });
   // Always redraw canvas after map refreshes to keep hatch fills in sync
   setTimeout(redraw, 50);
 }
+
+// ── MAP CLICK: handles all polygon clicks + overlap detection ───────
+map.on('click',function(e){
+  if(_vtxShape) return; // don't interfere with vertex editing
+  const lat=e.latlng.lat, lng=e.latlng.lng;
+  const matches=[];
+  polygonGroup.eachLayer(function(layer){
+    if(layer._projectId&&layer._popContent){
+      const lls=layer.getLatLngs()[0];
+      if(lls&&ptInPoly(lat,lng,lls.map(ll=>ll))){
+        if(!matches.find(m=>m.id===layer._projectId)){
+          matches.push({id:layer._projectId,pop:layer._popContent});
+        }
+      }
+    }
+  });
+  if(!matches.length) return;
+  if(matches.length===1){
+    L.popup({maxWidth:220}).setLatLng(e.latlng).setContent(matches[0].pop).openOn(map);
+    return;
+  }
+  // Multiple overlapping — show picker
+  window._overlapMatches=matches;
+  window._overlapLatLng=[lat,lng];
+  document.getElementById('overlapItems').innerHTML=matches.map((m,mi)=>{
+    const proj=projects.find(x=>String(x.id)===String(m.id));
+    const col=PHASES[proj?.phase]?.color||'#888';
+    return `<div class="overlap-item" onclick="window._openOverlapItem(${mi})">
+      <div class="overlap-dot" style="background:${col}"></div>${proj?.name||'Unknown'}</div>`;
+  }).join('');
+  overlapMenu.style.display='block';
+  overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
+  overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
+});
 
 // ── CANVAS ──────────────────────────────────────────────────────────
 const dc=document.getElementById('drawCanvas');
