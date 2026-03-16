@@ -499,6 +499,8 @@ let tool='pan',currentPhase='construction';
 let visibleStages=new Set(Object.keys(PHASES).filter(k=>k!=='staging'&&k!=='road'));
 let visibleTypes=new Set(['New Construction (Building, Structure, etc.)','Renovation','Infrastructure','Maintenance & Repair','Landscape','ENGIE Project','Redgate Project']);
 const _now=new Date();let tlStart=new Date(_now.getFullYear(),_now.getMonth(),1),tlMonths=60,tlSelectedMonth=0;
+let filterStart=null,filterEnd=null,tlWindowMonths=1;
+let showAllProjects=false;
 let activeTab='projects',contextProjectId=null;
 let mouseCanvasPos=null;
 
@@ -514,7 +516,6 @@ let editProjectId=null,editDrawing=false,editDrawTool=null,editDrawSection='exte
 
 // Playback
 let playing=false,playInterval=null;
-let showAllProjects=false;
 
 // ── LEAFLET ─────────────────────────────────────────────────────────
 const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,attribution:'Tiles © Esri'});
