@@ -178,6 +178,15 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 /* Midpoint handle — smaller, diamond shape for adding vertices */
 .midpoint-handle{width:12px;height:12px;background:#fff3d4;border:2.5px solid var(--gold);transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:crosshair;opacity:0.85;}
 .midpoint-handle:hover{opacity:1;background:var(--gold);transform:rotate(45deg) scale(1.4);}
+.vtx-toolbar{position:fixed;background:#fff;border:1px solid #dde2ea;border-radius:6px;
+  box-shadow:0 3px 12px rgba(0,0,0,.2);z-index:9500;display:none;padding:3px;gap:3px;
+  flex-direction:column;min-width:130px;}
+.vtx-toolbar.show{display:flex;}
+.vtx-toolbar button{padding:6px 12px;font-size:.72rem;font-family:'Source Sans 3',sans-serif;
+  font-weight:600;border:none;border-radius:4px;cursor:pointer;text-align:left;}
+.vtx-toolbar button:hover{background:#f0f4ff;}
+.vtx-toolbar button.danger{color:#c0304a;}
+.vtx-toolbar button.danger:hover{background:#fff0f2;}
 .hint-toast{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(4,30,66,.88);color:var(--gold);font-size:.64rem;font-weight:600;padding:5px 16px;border-radius:12px;z-index:600;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
 .hint-toast.show{opacity:1;}
 
@@ -328,6 +337,11 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       </div>
     </div>
   </div>
+</div>
+
+<!-- VERTEX TOOLBAR -->
+<div class="vtx-toolbar" id="vtxToolbar">
+  <button onclick="vtxDeleteSelected()">✕ Delete vertex</button>
 </div>
 
 <!-- OVERLAP PICKER -->
@@ -1281,7 +1295,7 @@ function editShapeVertices(shapeIndex){
 
   const col=PHASES[p.phase]?.color||'#C9A96E';
   document.getElementById('editPanel').classList.remove('show');
-  document.getElementById('bannerMsg').textContent='Drag handles to move · Right-click handle to add/remove · Middle-mouse to pan';
+  document.getElementById('bannerMsg').textContent='Drag circle to move · Click circle to select then delete · Click diamond to add vertex';
   document.getElementById('drawingBanner').classList.add('show');
   const doneBtn=document.querySelector('#drawingBanner button');
   doneBtn.textContent='✓ Done Editing';
@@ -1300,26 +1314,56 @@ function editShapeVertices(shapeIndex){
   try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[100,100],duration:.6});}catch(ex){}
 }
 
+// Vertex toolbar state
+let _vtxShape=null,_vtxProject=null,_vtxIdx=null,_vtxCol=null;
+const vtxToolbar=document.getElementById('vtxToolbar');
+document.addEventListener('click',function(e){
+  if(!vtxToolbar.contains(e.target)) vtxToolbar.classList.remove('show');
+});
+
+function vtxDeleteSelected(){
+  vtxToolbar.classList.remove('show');
+  if(!_vtxShape||_vtxIdx===null)return;
+  if(_vtxShape.latlngs.length<=3){showHint('A polygon needs at least 3 points',2000);return;}
+  _vtxShape.latlngs.splice(_vtxIdx,1);
+  _vtxIdx=null;
+  refreshMap();
+  apiPost({action:'update',project:{..._vtxProject}});
+  rebuildVertexHandles(_vtxShape,_vtxProject,_vtxCol);
+}
+
 function rebuildVertexHandles(s, p, col){
+  _vtxShape=s; _vtxProject=p; _vtxCol=col;
   vertexGroup.clearLayers();
   const lls=s.latlngs;
 
-  // ── Vertex handles (circle + ✕ delete button) ─────────────────────
+  // ── Vertex handles ────────────────────────────────────────────────
+  // Left-click: select vertex and show delete toolbar
+  // Drag: move vertex
   lls.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
-    // Each handle is a circle with a small ✕ in the top-right corner
-    const canDelete=lls.length>3;
     const icon=L.divIcon({
       className:'',
-      html:`<div style="position:relative;width:18px;height:18px;">
-        <div style="width:18px;height:18px;border-radius:50%;background:white;border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;"></div>
-        ${canDelete?`<div class="v-del-btn" data-vi="${vi}" style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:50%;background:#c0304a;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.4);line-height:1;">✕</div>`:''}
-      </div>`,
+      html:`<div style="width:18px;height:18px;border-radius:50%;background:white;
+        border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;
+        transition:transform .1s;" title="Drag to move · Click to select/delete"></div>`,
       iconSize:[18,18],iconAnchor:[9,9]
     });
     const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:5000,pane:'markerPane'}).addTo(vertexGroup);
 
+    vm.on('click',function(e){
+      L.DomEvent.stopPropagation(e);
+      // Show the floating toolbar near this vertex
+      _vtxIdx=vi;
+      const pt=map.latLngToContainerPoint(latLng);
+      const mapRect=map.getContainer().getBoundingClientRect();
+      vtxToolbar.style.left=(mapRect.left+pt.x+14)+'px';
+      vtxToolbar.style.top=(mapRect.top+pt.y-10)+'px';
+      vtxToolbar.classList.add('show');
+    });
+
     vm.on('drag',function(e){
+      vtxToolbar.classList.remove('show');
       const nl=e.target.getLatLng();
       lls[vi]=Array.isArray(lls[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
       refreshMap();
@@ -1327,27 +1371,6 @@ function rebuildVertexHandles(s, p, col){
     vm.on('dragend',function(){
       apiPost({action:'update',project:{...p}});
       rebuildVertexHandles(s,p,col);
-    });
-
-    // Wire the ✕ delete button — must stop propagation at mousedown level
-    // to prevent Leaflet's drag system from swallowing the event
-    vm.on('add',function(){
-      const el=vm.getElement();
-      if(!el)return;
-      const delBtn=el.querySelector('.v-del-btn');
-      if(delBtn){
-        L.DomEvent.on(delBtn,'mousedown',function(ev){
-          L.DomEvent.stop(ev);
-        });
-        L.DomEvent.on(delBtn,'mouseup',function(ev){
-          L.DomEvent.stop(ev);
-          if(lls.length<=3){showHint('A polygon needs at least 3 points',2000);return;}
-          lls.splice(vi,1);
-          refreshMap();
-          apiPost({action:'update',project:{...p}});
-          rebuildVertexHandles(s,p,col);
-        });
-      }
     });
   });
 
@@ -1366,6 +1389,7 @@ function rebuildVertexHandles(s, p, col){
     const mm=L.marker([midLat,midLng],{icon:midIcon,zIndexOffset:4000,pane:'markerPane'}).addTo(vertexGroup);
     mm.on('click',function(e){
       L.DomEvent.stopPropagation(e);
+      vtxToolbar.classList.remove('show');
       lls.splice(nextIdx,0,[midLat,midLng]);
       refreshMap();
       apiPost({action:'update',project:{...p}});
