@@ -163,7 +163,7 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .spill:hover{transform:scale(1.04);}
 .map-wrap{flex:1;position:relative;overflow:hidden;}
 #map{position:absolute;inset:0;}
-#drawCanvas{position:absolute;inset:0;z-index:399;pointer-events:none;}
+#drawCanvas{position:absolute;inset:0;z-index:450;pointer-events:none;}
 .proj-dot{width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;}
 .proj-dot:hover{transform:scale(1.25);}
 .leaflet-popup-content-wrapper{background:rgba(4,30,66,.95);color:#fff;border-radius:6px;border-left:3px solid var(--gold);padding:0;box-shadow:0 4px 20px rgba(0,0,0,.5);}
@@ -313,9 +313,8 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 
 <!-- CONTEXT MENU -->
 <div class="ctx-menu" id="ctxMenu">
-  <button onclick="openEditInfo()">✏️ Edit Project Info</button>
-  <button onclick="openEditExtents()">🗺 Edit Project Extents</button>
-  <button class="danger" onclick="confirmRemoveProject()">🗑 Remove Project</button>
+  <button onclick="openEditExtents()">✏️ Edit</button>
+  <button class="danger" onclick="confirmRemoveProject()">🗑 Remove</button>
 </div>
 
 <!-- CONFIRM REMOVE -->
@@ -589,10 +588,12 @@ map.on('popupopen', function(e) {
 // Custom pane for polygons below canvas, popups stay above canvas at z:700
 // polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
 map.createPane('polygonPane');
-map.getPane('polygonPane').style.zIndex = 450;  // above canvas(399), below popup
-map.getPane('popupPane').style.zIndex   = 700;  // Leaflet default, above everything
-// Remove overflow hidden on popup pane so popups aren't clipped
+map.getPane('polygonPane').style.zIndex = 400;   // below canvas(450)
+// Popup pane: Leaflet default is 700, well above canvas
+map.getPane('popupPane').style.zIndex   = 700;
 map.getPane('popupPane').style.overflow = 'visible';
+// markerPane above canvas so pin dots are visible
+map.getPane('markerPane').style.zIndex  = 600;
 const markerGroup=L.layerGroup().addTo(map);
 const vertexGroup=L.layerGroup().addTo(map);
 
@@ -630,11 +631,16 @@ function getProjectsAt(lat,lng){
   return hits;
 }
 
-map.on('click',function(e){
-  const hits=getProjectsAt(e.latlng.lat,e.latlng.lng);
-  if(hits.length<2)return; // single project handled by Leaflet polygon popup
-  // Multiple overlapping — stop Leaflet from opening individual popups
-  e.originalEvent.stopPropagation();
+// Overlap detection: called from polygon click handlers in refreshMap
+function handlePolyClick(e, projectId){
+  const lat=e.latlng.lat, lng=e.latlng.lng;
+  const hits=getProjectsAt(lat,lng);
+  if(hits.length<2){
+    // Single project — let Leaflet open its popup normally
+    return false;
+  }
+  // Multiple — show picker, prevent Leaflet popup
+  L.DomEvent.stopPropagation(e);
   document.getElementById('overlapItems').innerHTML=hits.map(p=>{
     const col=PHASES[p.phase]?.color||'#888';
     return `<div class="overlap-item" onclick="showProjectPopup('${p.id}',${e.latlng.lat},${e.latlng.lng});document.getElementById('overlapMenu').style.display='none'">
@@ -643,9 +649,8 @@ map.on('click',function(e){
   overlapMenu.style.display='block';
   overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
   overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
-  // Prevent immediate close
-  e.originalEvent._overlapHandled=true;
-});
+  return true;
+}
 
 function showProjectPopup(id,lat,lng){
   const p=projects.find(x=>String(x.id)===String(id));if(!p)return;
@@ -722,7 +727,11 @@ function refreshMap(){
           fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0,
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
-        L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
+        const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
+        poly.bindPopup(pop,{maxWidth:220});
+        poly.on('click',function(e){
+          if(!handlePolyClick(e,p.id)) poly.openPopup();
+        });
       }
     });
   });
