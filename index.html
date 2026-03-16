@@ -9,8 +9,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-.leaflet-popup-content-wrapper { cursor: move; user-select: none; }
-.leaflet-popup-content-wrapper:active { cursor: grabbing; }
+.leaflet-popup-content-wrapper { user-select: none; }
 </style>
 <style>
 :root{--navy:#041E42;--navy2:#071d3b;--navy3:#03111f;--gold:#C9A96E;--cream:#F5EFE0;--gray:#8a96a3;}
@@ -481,49 +480,49 @@ const map=L.map('map',{center:[38.9072,-77.0741],zoom:17,layers:[satellite],doub
 map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
 
 // ── DRAGGABLE POPUPS ─────────────────────────────────────────────────
-function makeDraggable(popup) {
-  popup.on('add', function() {
-    var wrapper = popup.getElement();
-    if (!wrapper) return;
-    var isDragging = false, startX, startY, origLeft, origTop;
+// Works by updating the popup's anchor latlng as the user drags,
+// so Leaflet always knows where it is and repositions it correctly.
+map.on('popupopen', function(e) {
+  var popup  = e.popup;
+  var wrapper = popup.getElement();
+  if (!wrapper || wrapper._dragSetup) return;
+  wrapper._dragSetup = true;
 
-    wrapper.addEventListener('mousedown', function(e) {
-      if (e.button !== 0) return;
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      var rect = wrapper.getBoundingClientRect();
-      origLeft = wrapper.offsetLeft;
-      origTop  = wrapper.offsetTop;
-      e.preventDefault();
-      e.stopPropagation();
-    });
+  var isDragging = false;
+  var startX, startY;
+  var startLatLng;
 
-    document.addEventListener('mousemove', function(e) {
-      if (!isDragging) return;
-      var dx = e.clientX - startX;
-      var dy = e.clientY - startY;
-      wrapper.style.left = (origLeft + dx) + 'px';
-      wrapper.style.top  = (origTop  + dy) + 'px';
-      // Detach popup from map latlng so it stays where dragged
-      wrapper.style.transform = 'none';
-      wrapper.style.position  = 'absolute';
-    });
+  wrapper.style.cursor = 'move';
 
-    document.addEventListener('mouseup', function() {
-      isDragging = false;
-    });
+  wrapper.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    isDragging  = true;
+    startX      = e.clientX;
+    startY      = e.clientY;
+    startLatLng = popup.getLatLng();
+    map.dragging.disable();
+    e.preventDefault();
+    e.stopPropagation();
   });
-  return popup;
-}
 
-// Patch L.Layer.bindPopup to auto-apply draggable
-var _origBindPopup = L.Layer.prototype.bindPopup;
-L.Layer.prototype.bindPopup = function(content, options) {
-  _origBindPopup.call(this, content, options);
-  makeDraggable(this._popup);
-  return this;
-};
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var dx = e.clientX - startX;
+    var dy = e.clientY - startY;
+    // Convert the original latlng to a pixel point, offset it, convert back
+    var startPt  = map.latLngToContainerPoint(startLatLng);
+    var newPt    = L.point(startPt.x + dx, startPt.y + dy);
+    var newLatLng = map.containerPointToLatLng(newPt);
+    popup.setLatLng(newLatLng);
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (isDragging) {
+      isDragging = false;
+      map.dragging.enable();
+    }
+  });
+});
 // Custom pane for polygons below canvas, popups stay above canvas at z:700
 // polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
 map.createPane('polygonPane');
