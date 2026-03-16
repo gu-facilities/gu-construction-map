@@ -507,17 +507,15 @@ function refreshMap(){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
-          fillOpacity:0,  // all hatch fills drawn on canvas
+          fillOpacity:0,
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
-        const poly=L.polygon(s.latlngs,polyOpts).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
-        // For staging/road, draw hatch fill on canvas overlay
-        if(isStaging||isRoad){
-          poly.on('add',()=>{ setTimeout(redraw,50); });
-        }
+        L.polygon(s.latlngs,polyOpts).bindPopup(pop,{maxWidth:220}).addTo(polygonGroup);
       }
     });
   });
+  // Always redraw canvas after map refreshes to keep hatch fills in sync
+  setTimeout(redraw, 50);
 }
 
 // ── CANVAS ──────────────────────────────────────────────────────────
@@ -594,12 +592,17 @@ function redraw(){
   const col=PHASES[currentPhase].color;
 
   // ── Saved project hatch fills (staging/road polygons) ─────────
-  const now=new Date(),cutoff=new Date(tlStart);
-  cutoff.setMonth(cutoff.getMonth()+tlSelectedMonth+1);
+  // Use same date window as refreshMap
+  const _smStart=new Date(tlStart);
+  _smStart.setMonth(_smStart.getMonth()+tlSelectedMonth);
+  _smStart.setDate(1);_smStart.setHours(0,0,0,0);
+  const _smEnd=new Date(_smStart);
+  _smEnd.setMonth(_smEnd.getMonth()+1);
+  _smEnd.setDate(0);_smEnd.setHours(23,59,59,999);
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
-    if(ps>cutoff||pe<new Date(tlStart))return;
+    if(ps>_smEnd||pe<_smStart)return;
     const pcol=PHASES[p.phase]?.color||PHASES['construction'].color;
     p.shapes.forEach(s=>{
       if(s.type!=='polygon'||!s.latlngs)return;
