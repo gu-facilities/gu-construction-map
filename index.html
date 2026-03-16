@@ -1301,6 +1301,8 @@ function editShapeVertices(shapeIndex){
 
   const col=PHASES[p.phase]?.color||'#C9A96E';
   document.getElementById('editPanel').classList.remove('show');
+  // Attach map-level contextmenu for vertex right-click delete
+  map.getContainer().addEventListener('contextmenu',_onVtxContextMenu);
   document.getElementById('bannerMsg').textContent='Drag circle to move · Click circle to select then delete · Click diamond to add vertex';
   document.getElementById('drawingBanner').classList.add('show');
   const doneBtn=document.querySelector('#drawingBanner button');
@@ -1312,6 +1314,7 @@ function editShapeVertices(shapeIndex){
     vertexGroup.clearLayers();
     vtxOverlay.innerHTML='';
     vtxToolbar.classList.remove('show');
+    map.getContainer().removeEventListener('contextmenu',_onVtxContextMenu);
     if(_vtxMoveHandler){map.off('move zoom',_vtxMoveHandler);_vtxMoveHandler=null;}
     _editShape=null;_editProject=null;
     apiPost({action:'update',project:{...p}});
@@ -1344,35 +1347,33 @@ function vtxDeleteSelected(){
 
 function updateVtxOverlay(lls,col,s,p){
   vtxOverlay.innerHTML='';
+  // Store lat/lngs for hit-testing on contextmenu
+  vtxOverlay._lls=lls;
+  vtxOverlay._s=s; vtxOverlay._p=p; vtxOverlay._col=col;
+}
+
+// Single contextmenu listener on the map container — no overlay divs blocking drag
+function _onVtxContextMenu(ev){
+  if(!_vtxShape)return;
+  const lls=_vtxShape.latlngs;
+  if(!lls||!lls.length)return;
+  // Find which vertex is under the cursor (within 14px)
+  const mapRect=map.getContainer().getBoundingClientRect();
+  const mx=ev.clientX-mapRect.left, my=ev.clientY-mapRect.top;
+  let closest=null, closestDist=14;
   lls.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
     const pt=map.latLngToContainerPoint(latLng);
-    // Invisible right-click target sitting exactly over the Leaflet marker
-    const div=document.createElement('div');
-    div.style.cssText=`position:absolute;left:${pt.x-9}px;top:${pt.y-9}px;width:18px;height:18px;
-      border-radius:50%;cursor:context-menu;pointer-events:all;z-index:10;`;
-    div.title='Right-click to delete vertex';
-    div.addEventListener('contextmenu',function(ev){
-      ev.preventDefault();
-      ev.stopPropagation();
-      vtxToolbar._vi=vi;
-      vtxToolbar.style.left=(ev.clientX+4)+'px';
-      vtxToolbar.style.top=(ev.clientY+4)+'px';
-      vtxToolbar.classList.add('show');
-    });
-    vtxOverlay.appendChild(div);
+    const dist=Math.sqrt((pt.x-mx)**2+(pt.y-my)**2);
+    if(dist<closestDist){closestDist=dist;closest=vi;}
   });
-  // Also add midpoint click targets
-  lls.forEach((ll,vi)=>{
-    const nextIdx=(vi+1)%lls.length;
-    const ll1=Array.isArray(ll)?ll:[ll.lat,ll.lng];
-    const ll2=Array.isArray(lls[nextIdx])?lls[nextIdx]:[lls[nextIdx].lat,lls[nextIdx].lng];
-    const midLat=(ll1[0]+ll2[0])/2, midLng=(ll1[1]+ll2[1])/2;
-    const pt=map.latLngToContainerPoint(L.latLng(midLat,midLng));
-    const div=document.createElement('div');
-    div.style.cssText=`position:absolute;left:${pt.x-7}px;top:${pt.y-7}px;width:14px;height:14px;
-      cursor:crosshair;pointer-events:all;z-index:9;`;
-  });
+  if(closest===null)return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  vtxToolbar._vi=closest;
+  vtxToolbar.style.left=(ev.clientX+4)+'px';
+  vtxToolbar.style.top=(ev.clientY+4)+'px';
+  vtxToolbar.classList.add('show');
 }
 
 function rebuildVertexHandles(s, p, col){
