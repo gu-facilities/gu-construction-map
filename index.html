@@ -1266,30 +1266,53 @@ function deleteShape(i){
 }
 
 function editShapeVertices(shapeIndex){
-  // Highlight which shape is being edited by showing only its handles
   vertexGroup.clearLayers();
   const p=projects.find(x=>String(x.id)===String(editProjectId));if(!p)return;
   const s=p.shapes[shapeIndex];
   if(!s||s.type!=='polygon'||!s.latlngs)return;
   const col=PHASES[p.phase]?.color||'#C9A96E';
+
+  // Hide edit modal so the full map is visible
+  document.getElementById('editPanel').classList.remove('show');
+
+  // Show "Done Editing" banner
+  document.getElementById('bannerMsg').textContent='Drag the handles to reshape · Middle-mouse to pan · Click Done Editing when finished';
+  document.getElementById('drawingBanner').classList.add('show');
+  const doneBtn=document.querySelector('#drawingBanner button');
+  doneBtn.textContent='✓ Done Editing';
+  doneBtn.onclick=function(){
+    // Restore banner button
+    doneBtn.textContent='✓ Done Drawing';
+    doneBtn.onclick=finishWizardDraw;
+    document.getElementById('drawingBanner').classList.remove('show');
+    vertexGroup.clearLayers();
+    // Save and re-open edit panel
+    apiPost({action:'update',project:{...p}});
+    document.getElementById('editPanel').classList.add('show');
+    showVertexHandles();
+  };
+
+  // Place a draggable handle at every vertex
   s.latlngs.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
-    const icon=L.divIcon({className:'',
-      html:`<div class="vertex-handle" style="border-color:${col};"></div>`,
-      iconSize:[12,12],iconAnchor:[6,6]});
-    const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:3000}).addTo(vertexGroup);
+    const icon=L.divIcon({
+      className:'',
+      html:`<div style="width:16px;height:16px;border-radius:50%;background:white;border:3px solid ${col};box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:grab;"></div>`,
+      iconSize:[16,16],iconAnchor:[8,8]
+    });
+    const vm=L.marker(latLng,{icon,draggable:true,zIndexOffset:5000,pane:'markerPane'}).addTo(vertexGroup);
     vm.on('drag',function(e){
       const nl=e.target.getLatLng();
       s.latlngs[vi]=Array.isArray(s.latlngs[vi])?[nl.lat,nl.lng]:{lat:nl.lat,lng:nl.lng};
-      refreshMap();redraw();
+      refreshMap();
     });
     vm.on('dragend',function(){
       apiPost({action:'update',project:{...p}});
     });
   });
-  // Fly to the shape
-  try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[60,60],duration:.5});}catch(e){}
-  showHint('Drag the handles to reshape · Click ✓ Save Changes when done',4000);
+
+  // Fly to the shape so it's fully visible
+  try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[100,100],duration:.6});}catch(ex){}
 }
 
 function startEditAddDraw(drawTool, section){
