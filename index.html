@@ -639,76 +639,52 @@ const polygonGroup=L.layerGroup().addTo(map);
 
 // ── OVERLAP SELECTOR ─────────────────────────────────────────────────
 const overlapMenu=document.getElementById('overlapMenu');
-// Close overlap menu on next click outside it (use setTimeout to avoid same-event close)
-document.addEventListener('click',e=>{
-  if(overlapMenu.style.display==='block'&&!overlapMenu.contains(e.target)){
-    overlapMenu.style.display='none';
-  }
-});
+let _overlapMenuOpen=false;
 
 function ptInPoly(lat,lng,lls){
   if(!lls||!lls.length) return false;
   let inside=false;
-  function getLat(p){return Array.isArray(p)?p[0]:p.lat;}
-  function getLng(p){return Array.isArray(p)?p[1]:p.lng;}
+  function _lat(p){return Array.isArray(p)?p[0]:p.lat;}
+  function _lng(p){return Array.isArray(p)?p[1]:p.lng;}
   for(let i=0,j=lls.length-1;i<lls.length;j=i++){
-    const xi=getLat(lls[i]), yi=getLng(lls[i]);
-    const xj=getLat(lls[j]), yj=getLng(lls[j]);
+    const xi=_lat(lls[i]),yi=_lng(lls[i]),xj=_lat(lls[j]),yj=_lng(lls[j]);
     if(((yi>lng)!=(yj>lng))&&(lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
   }
   return inside;
 }
 
-function getProjectsAt(lat,lng){
-  const ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
-  const we=filterEnd||(()=>{const d=new Date(ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
-  const hits=[];
-  projects.forEach(p=>{
-    if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
-    if(!showAllProjects&&(new Date(p.start)>we||new Date(p.end)<ws))return;
-    if(hits.find(h=>h.id===p.id))return;
-    p.shapes.forEach(s=>{
-      if(s.type==='polygon'&&s.latlngs&&ptInPoly(lat,lng,s.latlngs)) hits.push(p);
-    });
-  });
-  return hits;
-}
-
-// Overlap detection: called from polygon click handlers in refreshMap
-function handlePolyClick(e, projectId){
-  const lat=e.latlng.lat, lng=e.latlng.lng;
-  const hits=getProjectsAt(lat,lng);
-  if(hits.length<2){
-    // Single project — let Leaflet open its popup normally
-    return false;
-  }
-  // Multiple — show picker, prevent Leaflet popup
-  L.DomEvent.stopPropagation(e);
-  document.getElementById('overlapItems').innerHTML=hits.map(p=>{
-    const col=PHASES[p.phase]?.color||'#888';
-    return `<div class="overlap-item" onclick="showProjectPopup('${p.id}',${e.latlng.lat},${e.latlng.lng});document.getElementById('overlapMenu').style.display='none'">
-      <div class="overlap-dot" style="background:${col}"></div>${p.name}</div>`;
+function showOverlapMenu(matches, clientX, clientY, latlng){
+  window._overlapMatches=matches;
+  document.getElementById('overlapItems').innerHTML=matches.map((m,mi)=>{
+    const proj=projects.find(x=>String(x.id)===String(m.id));
+    const col=PHASES[proj?.phase]?.color||'#888';
+    return `<div class="overlap-item" onclick="window._openOverlapItem(${mi})">
+      <div class="overlap-dot" style="background:${col}"></div>${proj?.name||'Unknown'}</div>`;
   }).join('');
+  overlapMenu.style.left=(clientX+4)+'px';
+  overlapMenu.style.top=(clientY+4)+'px';
   overlapMenu.style.display='block';
-  overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
-  overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
-  return true;
+  _overlapMenuOpen=true;
+  // Close on next interaction outside menu
+  setTimeout(()=>{
+    function closeHandler(ev){
+      if(!overlapMenu.contains(ev.target)){
+        overlapMenu.style.display='none';
+        _overlapMenuOpen=false;
+        document.removeEventListener('mousedown',closeHandler);
+      }
+    }
+    document.addEventListener('mousedown',closeHandler);
+  },50);
 }
 
-function showProjectPopup(id,lat,lng){
-  const p=projects.find(x=>String(x.id)===String(id));if(!p)return;
-  const col=PHASES[p.phase].color;
-  const ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
-  const we=filterEnd||(()=>{const d=new Date(ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
-  const pct=Math.round(Math.min(Math.max(new Date((ws.getTime()+we.getTime())/2)-new Date(p.start),0),new Date(p.end)-new Date(p.start))/(new Date(p.end)-new Date(p.start))*100);
-  L.popup({maxWidth:220}).setLatLng([lat,lng]).setContent(
-    `<strong>${p.name}</strong>${p.manager?`<br><span style='font-size:.65rem;opacity:.75'>👤 ${p.manager}</span>`:''}
-    <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${PHASES[p.phase].label}</span><br>
-    ${p.type}<br>${p.start.slice(0,7)} – ${p.end.slice(0,7)}<br>
-    <div style="height:3px;background:#ffffff33;border-radius:2px;margin:5px 0 2px"><div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div></div>
-    <span style="font-size:.6rem;opacity:.7">${pct}% elapsed</span>`
-  ).openOn(map);
-}
+window._openOverlapItem=function(idx){
+  const m=window._overlapMatches[idx];
+  if(!m)return;
+  overlapMenu.style.display='none';
+  _overlapMenuOpen=false;
+  L.popup({maxWidth:220}).setLatLng(m.latlng).setContent(m.pop).openOn(map);
+};
 
 // ── VERTEX EDITING ────────────────────────────────────────────────────
 function showVertexHandles(){
@@ -807,46 +783,26 @@ function refreshMap(){
 // ── MAP CLICK: handles all polygon clicks + overlap detection ───────
 map.on('click',function(e){
   if(_vtxShape) return;
+  if(_overlapMenuOpen) return;
   const lat=e.latlng.lat, lng=e.latlng.lng;
   const matches=[];
-
-  // Check all rendered polygons regardless of phase/type filter
   polygonGroup.eachLayer(function(layer){
     if(!layer._projectId||!layer._popContent) return;
-    // getLatLngs() returns array of rings; flatten one level if needed
-    let ring=layer.getLatLngs();
-    if(ring.length&&Array.isArray(ring[0])) ring=ring[0];
-    else if(ring.length&&ring[0] instanceof Array) ring=ring[0];
-    // Handle both flat [LatLng,...] and nested [[LatLng,...]]
-    if(ring.length&&(ring[0] instanceof L.LatLng||ring[0].lat!==undefined)){
-      // already flat ring of LatLng objects
-    } else if(ring.length&&Array.isArray(ring[0])){
-      ring=ring[0]; // unwrap one more level
-    }
-    if(ptInPoly(lat,lng,ring)){
+    // Unwrap Leaflet polygon rings to a flat array of LatLng
+    const raw=layer.getLatLngs();
+    const ring=(raw[0] instanceof L.LatLng)?raw:raw[0];
+    if(ring&&ptInPoly(lat,lng,ring)){
       if(!matches.find(m=>m.id===layer._projectId)){
-        matches.push({id:layer._projectId,pop:layer._popContent});
+        matches.push({id:layer._projectId,pop:layer._popContent,latlng:e.latlng});
       }
     }
   });
-
   if(!matches.length) return;
   if(matches.length===1){
     L.popup({maxWidth:220}).setLatLng(e.latlng).setContent(matches[0].pop).openOn(map);
     return;
   }
-  // Multiple overlapping — show picker
-  window._overlapMatches=matches;
-  window._overlapLatLng=[lat,lng];
-  document.getElementById('overlapItems').innerHTML=matches.map((m,mi)=>{
-    const proj=projects.find(x=>String(x.id)===String(m.id));
-    const col=PHASES[proj?.phase]?.color||'#888';
-    return `<div class="overlap-item" onclick="window._openOverlapItem(${mi})">
-      <div class="overlap-dot" style="background:${col}"></div>${proj?.name||'Unknown'}</div>`;
-  }).join('');
-  overlapMenu.style.display='block';
-  overlapMenu.style.left=(e.originalEvent.clientX+4)+'px';
-  overlapMenu.style.top=(e.originalEvent.clientY+4)+'px';
+  showOverlapMenu(matches,e.originalEvent.clientX,e.originalEvent.clientY,e.latlng);
 });
 
 // ── CANVAS ──────────────────────────────────────────────────────────
