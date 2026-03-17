@@ -734,17 +734,22 @@ function refreshMap(){
     const col=PHASES[p.phase].color;
     const midMonth=new Date((_ws.getTime()+_we.getTime())/2);
     const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
-    const pop=`<strong>${p.name}</strong>${p.manager?`<br><span style='font-size:.65rem;opacity:.75'>👤 ${p.manager}</span>`:''}
-      <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${PHASES[p.phase].label}</span><br>
+    function buildPop(shapeLabel){
+      return `<strong>${p.name}</strong>${p.manager?`<br><span style='font-size:.65rem;opacity:.75'>👤 ${p.manager}</span>`:''}
+      <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${PHASES[p.phase].label}</span>
+      <span style="display:inline-block;background:#f0f4ff;color:#445;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-left:3px;margin-bottom:4px;">${shapeLabel}</span><br>
       ${p.type}<br>${p.start.slice(0,7)} – ${p.end.slice(0,7)}<br>
       <div style="height:3px;background:#ffffff33;border-radius:2px;margin:5px 0 2px"><div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div></div>
       <span style="font-size:.6rem;opacity:.7">${pct}% elapsed</span>`;
+    }
     p.shapes.forEach(s=>{
       if(s.type==='pin'){
+        const shapeLabel=s.isStagingArea?'Staging Area':s.isRoadClosure?'Road Closure':'Project Extents';
         const icon=L.divIcon({className:'',html:`<div class="proj-dot" style="background:${col}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
-        L.marker([s.lat,s.lng],{icon}).bindPopup(pop,{maxWidth:220}).addTo(markerGroup);
+        L.marker([s.lat,s.lng],{icon}).bindPopup(buildPop(shapeLabel),{maxWidth:220}).addTo(markerGroup);
       } else if(s.type==='polygon'&&s.latlngs){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
+        const shapeLabel=isStaging?'Staging Area':isRoad?'Road Closure':'Project Extents';
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
           fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0,
@@ -752,7 +757,7 @@ function refreshMap(){
         };
         const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
         poly._projectId=p.id;
-        poly._popContent=pop;
+        poly._popContent=buildPop(shapeLabel);
         // Apply SVG hatch pattern fill for staging/road
         if(isStaging||isRoad){
           const uid='pat_'+Math.random().toString(36).slice(2,7);
