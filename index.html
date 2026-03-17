@@ -1593,9 +1593,15 @@ function renderSidebar(){const el=document.getElementById('tabContent');if(activ
 function buildProjectsHTML(){
   const _ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
   const _we=filterEnd||(()=>{const d=new Date(_ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
+  const phaseOrder={charter:0,design:1,pre:2,construction:3,closeout:4};
+  const sorted=[...projects].sort((a,b)=>{
+    const po=(phaseOrder[a.phase]??99)-(phaseOrder[b.phase]??99);
+    if(po!==0) return po;
+    return (a.name||'').localeCompare(b.name||'');
+  });
   let html=`<button class="new-project-btn" onclick="openWizard()"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="#C9A96E"/><line x1="7" y1="3.5" x2="7" y2="10.5" stroke="#C9A96E" stroke-width="1.5"/><line x1="3.5" y1="7" x2="10.5" y2="7" stroke="#C9A96E" stroke-width="1.5"/></svg> New Project</button>`;
   let count=0;
-  projects.forEach(p=>{
+  sorted.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);if(!showAllProjects&&(ps>_we||pe<_ws))return;
     count++;
