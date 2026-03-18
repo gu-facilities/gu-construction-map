@@ -286,7 +286,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
     </div>
     <div class="stage-bar">
       <span class="tlbl" style="color:#2a4060">Project Stage</span>
-      <span class="spill on" data-stage="charter"      style="background:#534AB7" onclick="toggleStage(this)">Charter</span>
+      <span class="spill on" data-stage="charter"      style="background:#534AB7" onclick="toggleStage(this)">Charter/Procurement</span>
       <span class="spill on" data-stage="design"       style="background:#D4A800" onclick="toggleStage(this)">Design</span>
       <span class="spill on" data-stage="pre"          style="background:#BA7517" onclick="toggleStage(this)">Preconstruction</span>
       <span class="spill on" data-stage="construction" style="background:#D85A30" onclick="toggleStage(this)">Under Construction</span>
@@ -416,7 +416,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           </select></div>
         <div class="wf full"><label>Starting Phase <span style="color:#c0304a">*</span></label>
           <select id="wiz-phase" onchange="buildPhaseSchedule()">
-            <option value="charter">Charter</option>
+            <option value="charter">Charter/Procurement</option>
             <option value="design">Design</option>
             <option value="pre">Preconstruction</option>
             <option value="construction">Under Construction</option>
@@ -526,7 +526,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
         </select></div>
       <div class="wf"><label>Phase</label>
         <select id="edit-phase">
-          <option value="charter">Charter</option><option value="design">Design</option>
+          <option value="charter">Charter/Procurement</option><option value="design">Design</option>
           <option value="pre">Preconstruction</option><option value="construction">Under Construction</option>
           <option value="closeout">Closeout</option>
         </select></div>
@@ -583,7 +583,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
-const PHASES={charter:{label:'Charter',color:'#534AB7'},design:{label:'Design',color:'#D4A800'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
+const PHASES={charter:{label:'Charter/Procurement',color:'#534AB7'},design:{label:'Design',color:'#D4A800'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 let projects=[
@@ -764,7 +764,7 @@ function hideVertexHandles(){
 
 // ── PHASE SCHEDULE ───────────────────────────────────────────────────
 const PHASE_ORDER=['charter','design','pre','construction','closeout'];
-const PHASE_LABELS={charter:'Charter',design:'Design',pre:'Preconstruction',construction:'Under Construction',closeout:'Closeout'};
+const PHASE_LABELS={charter:'Charter/Procurement',design:'Design',pre:'Preconstruction',construction:'Under Construction',closeout:'Closeout'};
 
 function buildPhaseSchedule(){
   _manuallyEdited.clear();
