@@ -496,6 +496,33 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
         </div>
       </div>
 
+      <!-- Pedestrian Access -->
+      <div class="draw-section">
+        <div class="draw-section-title">🚶 Does this project affect Pedestrian Access?</div>
+        <div class="yn-toggle">
+          <button class="yn-btn" id="yn-ped-no"  onclick="setPedYN(false)">No</button>
+          <button class="yn-btn" id="yn-ped-yes" onclick="setPedYN(true)">Yes</button>
+        </div>
+        <div id="pedDrawTools" style="display:none;margin-top:10px;">
+          <p style="font-size:.68rem;color:#778;margin-bottom:6px">Draw a line along the affected pedestrian path — click to place points, double-click to finish.</p>
+          <div class="draw-tools">
+            <button class="wdbtn" id="wiz-btn-ped-line" onclick="startWizardDraw('ped','line')">〰 Draw Line</button>
+          </div>
+          <div class="drawn-items" id="drawnPed"></div>
+          <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
+              <label style="display:flex;align-items:center;gap:5px;font-size:.68rem;color:#556;cursor:pointer;margin-left:auto;">
+                <input type="checkbox" id="ped-match-chk" checked onchange="toggleShapeTimeline('ped')"
+                  style="accent-color:var(--navy);width:13px;height:13px;cursor:pointer;">
+                Match Project Phasing Timeline
+              </label>
+            </div>
+            <div id="ped-phase-grid"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="wizard-actions">
         <span style="font-size:.65rem;color:#a0aab8;margin-right:auto"><span style="color:#c0304a">*</span> Required fields</span>
         <button class="btn-cancel-wiz" onclick="closeWizard()">Cancel</button>
@@ -570,6 +597,14 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <button class="wdbtn" onclick="startEditAddDraw('pin','road')">📍 Drop Pin</button>
         </div>
       </div>
+      <!-- Pedestrian Access -->
+      <div class="ep-section">
+        <div class="ep-section-title">🚶 Pedestrian Access</div>
+        <div class="shapes-list" id="editPedList"></div>
+        <div class="ep-draw-tools">
+          <button class="wdbtn" onclick="startEditAddDraw('line','ped')">〰 Draw Line</button>
+        </div>
+      </div>
     </div>
 
     <div class="ep-actions">
@@ -613,7 +648,7 @@ let mouseCanvasPos=null;
 let wizardOpen=false,wizardDrawing=false;
 let wizDrawContext=null; // {section:'extents'|'staging', tool:'polygon'|'pin'}
 let wizCurrentLLs=[];
-let wizExtentShapes=[],wizStagingShapes=[],wizRoadShapes=[];
+let wizExtentShapes=[],wizStagingShapes=[],wizRoadShapes=[],wizPedShapes=[];
 let stagingYN=false,roadYN=false;
 
 // Edit extents state
@@ -1198,6 +1233,9 @@ function redraw(){
     wizRoadShapes.forEach(s=>{
       if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
+    wizPedShapes.forEach(s=>{
+      if(s.type==='line') drawLineOnCanvas(s.latlngs, wizCol);
+    });
   }
 
   // ── In-progress wizard polygon (dashed preview) ──────────────────
@@ -1294,15 +1332,15 @@ dc.addEventListener('click',e=>{
   const x=e.clientX-r.left,y=e.clientY-r.top;
   const ll=xyToLL(x,y);
 
-  // Wizard polygon drawing
-  if(wizardOpen&&wizDrawContext&&wizDrawContext.drawTool==='polygon'){
+  // Wizard polygon/line drawing
+  if(wizardOpen&&wizDrawContext&&(wizDrawContext.drawTool==='polygon'||wizDrawContext.drawTool==='line')){
     if(!wizardDrawing){wizardDrawing=true;wizCurrentLLs=[];}
     wizCurrentLLs.push(ll);
     redraw();
     return;
   }
-  // Edit polygon drawing (editDrawing starts false, set true on first click)
-  if(editDrawTool==='polygon'&&editProjectId){
+  // Edit polygon/line drawing
+  if((editDrawTool==='polygon'||editDrawTool==='line')&&editProjectId){
     if(!editDrawing){editDrawing=true;editCurrentLLs=[];}
     editCurrentLLs.push(ll);redraw();
     return;
@@ -1336,21 +1374,21 @@ dc.addEventListener('dblclick',e=>{
 // ── WIZARD ──────────────────────────────────────────────────────────
 function openWizard(){
   wizardOpen=true;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
-  wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizRoadShapes=[];stagingYN=false;roadYN=false;
+  wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];wizPedShapes=[];stagingYN=false;roadYN=false;
   document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
   document.getElementById('wiz-phase').value='charter';
   buildPhaseSchedule();
   // Reset shape timeline checkboxes and grids
-  ['stg','road'].forEach(t=>{
+  ['stg','road','ped'].forEach(t=>{
     const chk=document.getElementById(t+'-match-chk');
     if(chk){chk.checked=true;}
     const grid=document.getElementById(t+'-phase-grid');
     if(grid) grid.innerHTML='';
   });
   document.getElementById('drawnExtents').innerHTML='';document.getElementById('drawnStaging').innerHTML='';document.getElementById('drawnRoad').innerHTML='';
-  document.getElementById('stagingDrawTools').style.display='none';document.getElementById('roadDrawTools').style.display='none';
+  document.getElementById('stagingDrawTools').style.display='none';document.getElementById('roadDrawTools').style.display='none';document.getElementById('pedDrawTools').style.display='none';
   document.getElementById('yn-yes').classList.remove('active');document.getElementById('yn-no').classList.remove('active');
-  document.getElementById('yn-road-yes').classList.remove('active');document.getElementById('yn-road-no').classList.remove('active');
+  document.getElementById('yn-road-yes').classList.remove('active');document.getElementById('yn-road-no').classList.remove('active');document.getElementById('yn-ped-yes').classList.remove('active');document.getElementById('yn-ped-no').classList.remove('active');
   document.querySelectorAll('.wdbtn').forEach(b=>b.classList.remove('active'));
   const panel=document.getElementById('wizardPanel');panel.classList.remove('hidden-for-drawing');
   document.getElementById('wizardOverlay').style.pointerEvents='all';
@@ -1361,7 +1399,7 @@ function openWizard(){
 
 function closeWizard(){
   wizardOpen=false;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
-  wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];
+  wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];
   document.getElementById('wizardOverlay').classList.remove('show');
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
@@ -1445,7 +1483,7 @@ function toggleShapeTimeline(prefix){
 
 function syncShapeTimelines(){
   // Called when main phase dates change — refresh any locked shape grids
-  ['stg','road'].forEach(prefix=>{
+  ['stg','road','ped'].forEach(prefix=>{
     const chk=document.getElementById(prefix+'-match-chk');
     if(chk&&chk.checked) buildShapePhaseGrid(prefix, true);
   });
@@ -1489,6 +1527,13 @@ function setStagingYN(val){
   document.getElementById('stagingDrawTools').style.display=val?'block':'none';
   if(val) buildShapePhaseGrid('stg', true);
 }
+function setPedYN(val){
+  document.getElementById('yn-ped-yes').classList.toggle('active',val);
+  document.getElementById('yn-ped-no').classList.toggle('active',!val);
+  document.getElementById('pedDrawTools').style.display=val?'block':'none';
+  if(val) buildShapePhaseGrid('ped', true);
+}
+
 function setRoadYN(val){
   roadYN=val;
   document.getElementById('yn-road-yes').classList.toggle('active',val);
@@ -1505,8 +1550,9 @@ function startWizardDraw(section,drawTool){
   document.getElementById('wizardPanel').classList.add('hidden-for-drawing');
   document.getElementById('wizardOverlay').style.pointerEvents='none';
   const isPoly=(drawTool==='polygon');
-  document.getElementById('bannerMsg').textContent=isPoly
-    ?'Click to place polygon points · Double-click to finish · or click Done Drawing'
+  const isLine=(drawTool==='line');
+  document.getElementById('bannerMsg').textContent=isPoly||isLine
+    ?'Click to place points · Double-click to finish · or click Done Drawing'
     :'Click anywhere on the map to drop a pin · click Done Drawing when finished';
   document.getElementById('drawingBanner').classList.add('show');
   if(isPoly){
@@ -1534,7 +1580,8 @@ function restoreWizard(){
 
 function finishWizardDraw(){
   // If polygon in progress with enough points, commit it
-  if(wizardDrawing&&wizCurrentLLs.length>=2){
+  const isLine=wizDrawContext?.drawTool==='line';
+  if(wizardDrawing&&((isLine&&wizCurrentLLs.length>=2)||(!isLine&&wizCurrentLLs.length>=3))){
     commitWizPolygon();
   }
   wizardDrawing=false;wizCurrentLLs=[];
@@ -1548,12 +1595,20 @@ function finishWizardDraw(){
   redraw();
 }
 
+function getSectionArr(section){ return section==='staging'?wizStagingShapes:section==='road'?wizRoadShapes:section==='ped'?wizPedShapes:wizExtentShapes; }
+function getSectionElId(section){ return section==='staging'?'drawnStaging':section==='road'?'drawnRoad':section==='ped'?'drawnPed':'drawnExtents'; }
+
 function commitWizPolygon(){
-  const arr=wizDrawContext?.section==='staging'?wizStagingShapes:wizDrawContext?.section==='road'?wizRoadShapes:wizExtentShapes;
-  const elId=wizDrawContext?.section==='staging'?'drawnStaging':wizDrawContext?.section==='road'?'drawnRoad':'drawnExtents';
-  arr.push({type:'polygon',latlngs:[...wizCurrentLLs]});
+  const section=wizDrawContext?.section;
+  const drawTool=wizDrawContext?.drawTool;
+  const arr=getSectionArr(section);
+  const elId=getSectionElId(section);
+  const shapeType=(drawTool==='line')?'line':'polygon';
+  if(shapeType==='line'&&wizCurrentLLs.length<2){wizCurrentLLs=[];wizardDrawing=false;return;}
+  if(shapeType==='polygon'&&wizCurrentLLs.length<3){wizCurrentLLs=[];wizardDrawing=false;return;}
+  arr.push({type:shapeType,latlngs:[...wizCurrentLLs],isPedAccess:(section==='ped')});
   wizCurrentLLs=[];wizardDrawing=false;
-  updateDrawnItemsEl(arr,elId,wizDrawContext?.section);
+  updateDrawnItemsEl(arr,elId,section);
   redraw();
 }
 
@@ -1561,8 +1616,8 @@ function onWizMapClick(e){
   // Only handles pin drops — polygon clicks go through canvas dc.addEventListener
   if(!wizDrawContext||wizDrawContext.drawTool!=='pin')return;
   const ll=[e.latlng.lat,e.latlng.lng];
-  const arr=wizDrawContext.section==='staging'?wizStagingShapes:wizDrawContext.section==='road'?wizRoadShapes:wizExtentShapes;
-  const elId=wizDrawContext.section==='staging'?'drawnStaging':wizDrawContext.section==='road'?'drawnRoad':'drawnExtents';
+  const arr=getSectionArr(wizDrawContext.section);
+  const elId=getSectionElId(wizDrawContext.section);
   arr.push({type:'pin',lat:ll[0],lng:ll[1]});
   updateDrawnItemsEl(arr,elId,wizDrawContext.section);
   const col=PHASES[document.getElementById('wiz-phase').value].color;
@@ -1575,14 +1630,13 @@ function onWizMapMove(e){ /* mousemove handled by dc mousemove listener */ }
 
 function updateDrawnItemsEl(arr,elId,section){
   const el=document.getElementById(elId);
-  el.innerHTML=arr.map((s,i)=>`<div class="drawn-tag">${s.type==='pin'?'📍 Pin':'⬡ Area'} ${i+1}<button onclick="removeWizShape('${section}',${i})">×</button></div>`).join('');
+  if(!el)return;
+  el.innerHTML=arr.map((s,i)=>`<div class="drawn-tag">${s.type==='pin'?'📍 Pin':s.type==='line'?'〰 Line':'⬡ Area'} ${i+1}<button onclick="removeWizShape('${section}',${i})">×</button></div>`).join('');
 }
 function removeWizShape(section,i){
-  if(section==='staging')wizStagingShapes.splice(i,1);
-  else if(section==='road')wizRoadShapes.splice(i,1);
-  else wizExtentShapes.splice(i,1);
-  const arr=section==='staging'?wizStagingShapes:section==='road'?wizRoadShapes:wizExtentShapes;
-  const elId=section==='staging'?'drawnStaging':section==='road'?'drawnRoad':'drawnExtents';
+  getSectionArr(section).splice(i,1);
+  const arr=getSectionArr(section);
+  const elId=getSectionElId(section);
   updateDrawnItemsEl(arr,elId,section);
   refreshMap();redraw();
 }
@@ -1610,6 +1664,7 @@ function saveProject(){
   const endVal=phaseSchedule.entries[phaseSchedule.entries.length-1].end;
   const stagingTimeline=getShapeTimeline('stg');
   const roadTimeline=getShapeTimeline('road');
+  const pedTimeline=getShapeTimeline('ped');
   const allShapes=[
     ...wizExtentShapes,
     ...wizStagingShapes.map(s=>({...s,isStagingArea:true,
@@ -1617,7 +1672,10 @@ function saveProject(){
       phaseSchedule:stagingTimeline.phaseSchedule||[]})),
     ...wizRoadShapes.map(s=>({...s,isRoadClosure:true,
       start:roadTimeline.start,end:roadTimeline.end,
-      phaseSchedule:roadTimeline.phaseSchedule||[]}))
+      phaseSchedule:roadTimeline.phaseSchedule||[]})),
+    ...wizPedShapes.map(s=>({...s,isPedAccess:true,
+      start:pedTimeline.start,end:pedTimeline.end,
+      phaseSchedule:pedTimeline.phaseSchedule||[]}))
   ];
   const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
     phase:startingPhase,start:startVal,end:endVal,desc:desc,
