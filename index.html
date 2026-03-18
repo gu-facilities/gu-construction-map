@@ -745,6 +745,7 @@ const PHASE_ORDER=['charter','design','pre','construction','closeout'];
 const PHASE_LABELS={charter:'Charter',design:'Design',pre:'Preconstruction',construction:'Under Construction',closeout:'Closeout'};
 
 function buildPhaseSchedule(){
+  _manuallyEdited.clear();
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
@@ -761,47 +762,77 @@ function buildPhaseSchedule(){
       </div>
       <div class="phase-sched-dates">
         <div><label>Start Date <span style="color:#c0304a">*</span></label>
-          <input type="date" id="ps-${ph}-start" onchange="syncPhaseOverlap()"></div>
+          <input type="date" id="ps-${ph}-start" onchange="onPhaseDateChange('${ph}','start')"></div>
         <div><label>End Date <span style="color:#c0304a">*</span></label>
-          <input type="date" id="ps-${ph}-end" onchange="syncPhaseOverlap()"></div>
+          <input type="date" id="ps-${ph}-end" onchange="onPhaseDateChange('${ph}','end')"></div>
       </div>
     </div>`;
   }).join('')+'</div>';
 }
 
-function syncPhaseOverlap(){
+// Track which fields were manually edited vs auto-filled
+const _manuallyEdited=new Set();
+
+function onPhaseDateChange(ph, field){
+  // Mark this field as manually edited
+  _manuallyEdited.add('ps-'+ph+'-'+field);
+  cascadePhaseSchedule(ph, field);
+}
+
+function cascadePhaseSchedule(changedPh, changedField){
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
-  phases.forEach((ph,i)=>{
+  const changedIdx=phases.indexOf(changedPh);
+  if(changedIdx===-1) return;
+
+  // Walk forward from the changed phase
+  for(let i=changedIdx;i<phases.length;i++){
+    const ph=phases[i];
     const startEl=document.getElementById('ps-'+ph+'-start');
     const endEl=document.getElementById('ps-'+ph+'-end');
-    // If start is filled but end is empty → set end = start + 1 day
-    if(startEl&&startEl.value&&endEl&&!endEl.value){
-      const d=new Date(startEl.value);
-      d.setDate(d.getDate()+1);
-      endEl.value=d.toISOString().slice(0,10);
-    }
-    // Always cascade: if end is filled, overwrite next phase start = end + 1 day
-    // and if next phase start changed and next phase end is empty, fill that too
-    if(i<phases.length-1&&endEl&&endEl.value){
-      const nextStartEl=document.getElementById('ps-'+phases[i+1]+'-start');
-      const nextEndEl=document.getElementById('ps-'+phases[i+1]+'-end');
-      if(nextStartEl){
-        const d=new Date(endEl.value);
+
+    // If start just changed and end is not manually set → set end = start + 1 day
+    if(startEl&&startEl.value&&endEl){
+      const endKey='ps-'+ph+'-end';
+      if(!_manuallyEdited.has(endKey)){
+        const d=new Date(startEl.value);
         d.setDate(d.getDate()+1);
-        const newNextStart=d.toISOString().slice(0,10);
-        // Only overwrite if it was previously auto-set or empty
-        nextStartEl.value=newNextStart;
-        // If next end is empty or was previously = next start, push it forward too
-        if(nextEndEl&&(!nextEndEl.value||nextEndEl.value===nextStartEl.value)){
-          const d2=new Date(newNextStart);
-          d2.setDate(d2.getDate()+1);
-          nextEndEl.value=d2.toISOString().slice(0,10);
-        }
+        endEl.value=d.toISOString().slice(0,10);
       }
     }
-  });
+
+    // If end is set → push next phase start = end + 1 day (always overwrite auto-filled)
+    if(i<phases.length-1&&endEl&&endEl.value){
+      const nextPh=phases[i+1];
+      const nextStartEl=document.getElementById('ps-'+nextPh+'-start');
+      const nextEndEl=document.getElementById('ps-'+nextPh+'-end');
+      const nextStartKey='ps-'+nextPh+'-start';
+      const nextEndKey='ps-'+nextPh+'-end';
+
+      if(nextStartEl&&!_manuallyEdited.has(nextStartKey)){
+        const d=new Date(endEl.value);
+        d.setDate(d.getDate()+1);
+        nextStartEl.value=d.toISOString().slice(0,10);
+      }
+      // Also push next end forward if not manually set
+      if(nextStartEl&&nextEndEl&&!_manuallyEdited.has(nextEndKey)){
+        const d=new Date(nextStartEl.value);
+        d.setDate(d.getDate()+1);
+        nextEndEl.value=d.toISOString().slice(0,10);
+      }
+    }
+  }
+}
+
+function syncPhaseOverlap(){
+  // Legacy: full cascade from beginning (used on initial build)
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  if(phases.length&&document.getElementById('ps-'+phases[0]+'-start')?.value){
+    cascadePhaseSchedule(phases[0],'start');
+  }
 }
 
 function readPhaseSchedule(){
