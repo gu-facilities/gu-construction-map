@@ -455,7 +455,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           </div>
           <div class="drawn-items" id="drawnStaging"></div>
           <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
               <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
               <label style="display:flex;align-items:center;gap:5px;font-size:.68rem;color:#556;cursor:pointer;margin-left:auto;">
                 <input type="checkbox" id="stg-match-chk" checked onchange="toggleShapeTimeline('stg')"
@@ -463,13 +463,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
                 Match Project Phasing Timeline
               </label>
             </div>
-            <div id="stg-custom-dates" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
-              <div><label style="font-size:.62rem;color:#667;font-weight:600;">Start Date</label>
-                <input type="date" id="stg-start" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
-              <div><label style="font-size:.62rem;color:#667;font-weight:600;">End Date</label>
-                <input type="date" id="stg-end" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
-            </div>
-            <div id="stg-match-display" style="font-size:.65rem;color:#889;font-style:italic;">Using project phasing dates</div>
+            <div id="stg-phase-grid"></div>
           </div>
         </div>
       </div>
@@ -489,7 +483,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           </div>
           <div class="drawn-items" id="drawnRoad"></div>
           <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
               <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
               <label style="display:flex;align-items:center;gap:5px;font-size:.68rem;color:#556;cursor:pointer;margin-left:auto;">
                 <input type="checkbox" id="road-match-chk" checked onchange="toggleShapeTimeline('road')"
@@ -497,13 +491,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
                 Match Project Phasing Timeline
               </label>
             </div>
-            <div id="road-custom-dates" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
-              <div><label style="font-size:.62rem;color:#667;font-weight:600;">Start Date</label>
-                <input type="date" id="road-start" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
-              <div><label style="font-size:.62rem;color:#667;font-weight:600;">End Date</label>
-                <input type="date" id="road-end" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
-            </div>
-            <div id="road-match-display" style="font-size:.65rem;color:#889;font-style:italic;">Using project phasing dates</div>
+            <div id="road-phase-grid"></div>
           </div>
         </div>
       </div>
@@ -836,6 +824,8 @@ function cascadePhaseSchedule(changedPh, changedField){
       }
     }
 
+    // Sync shape timelines whenever main dates update
+    syncShapeTimelines();
     // If end is set → push next phase start = end + 1 day (always overwrite auto-filled)
     if(i<phases.length-1&&endEl&&endEl.value){
       const nextPh=phases[i+1];
@@ -1257,10 +1247,12 @@ function openWizard(){
   document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
   document.getElementById('wiz-phase').value='charter';
   buildPhaseSchedule();
-  // Reset shape timeline checkboxes
+  // Reset shape timeline checkboxes and grids
   ['stg','road'].forEach(t=>{
     const chk=document.getElementById(t+'-match-chk');
-    if(chk){chk.checked=true;toggleShapeTimeline(t);}
+    if(chk){chk.checked=true;}
+    const grid=document.getElementById(t+'-phase-grid');
+    if(grid) grid.innerHTML='';
   });
   document.getElementById('drawnExtents').innerHTML='';document.getElementById('drawnStaging').innerHTML='';document.getElementById('drawnRoad').innerHTML='';
   document.getElementById('stagingDrawTools').style.display='none';document.getElementById('roadDrawTools').style.display='none';
@@ -1285,33 +1277,77 @@ function closeWizard(){
   redraw();
 }
 
-function toggleShapeTimeline(type){
-  const chk=document.getElementById(type+'-match-chk');
-  const customDiv=document.getElementById(type+'-custom-dates');
-  const matchDisplay=document.getElementById(type+'-match-display');
-  if(chk.checked){
-    customDiv.style.display='none';
-    matchDisplay.style.display='block';
-  } else {
-    customDiv.style.display='grid';
-    matchDisplay.style.display='none';
-  }
+function buildShapePhaseGrid(prefix, matchDates){
+  // Build the same phase grid as the main schedule, pre-filled with same dates
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  const grid=document.getElementById(prefix+'-phase-grid');
+  if(!grid) return;
+  const locked=document.getElementById(prefix+'-match-chk')?.checked;
+
+  grid.innerHTML='<div class="phase-sched">'+phases.map(ph=>{
+    const col=PHASES[ph].color;
+    // Get dates from main schedule if matching, otherwise use existing values
+    const mainStart=document.getElementById('ps-'+ph+'-start')?.value||'';
+    const mainEnd=document.getElementById('ps-'+ph+'-end')?.value||'';
+    const existStart=matchDates?mainStart:(document.getElementById(prefix+'-'+ph+'-start')?.value||mainStart);
+    const existEnd=matchDates?mainEnd:(document.getElementById(prefix+'-'+ph+'-end')?.value||mainEnd);
+    return `<div class="phase-sched-row" style="border-color:${col}22;">
+      <div class="phase-sched-label">
+        <div class="phase-sched-dot" style="background:${col}"></div>
+        <span style="color:${col}">${PHASE_LABELS[ph]}</span>
+      </div>
+      <div class="phase-sched-dates">
+        <div><label>Start Date</label>
+          <input type="date" id="${prefix}-${ph}-start" value="${existStart}"
+            ${locked?'disabled style="background:#f8f9fb;color:#aaa;"':''}></div>
+        <div><label>End Date</label>
+          <input type="date" id="${prefix}-${ph}-end" value="${existEnd}"
+            ${locked?'disabled style="background:#f8f9fb;color:#aaa;"':''}></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
 }
 
-function getShapeTimeline(type){
-  // Returns {start, end} for staging or road closure
-  const chk=document.getElementById(type+'-match-chk');
-  if(!chk||chk.checked){
-    // Match project phasing — use overall project start/end from phase schedule
-    const sched=readPhaseSchedule();
-    if(sched.entries.length){
-      return {start:sched.entries[0].start, end:sched.entries[sched.entries.length-1].end};
-    }
-    return {start:'',end:''};
+function toggleShapeTimeline(prefix){
+  const chk=document.getElementById(prefix+'-match-chk');
+  buildShapePhaseGrid(prefix, chk.checked);
+}
+
+function syncShapeTimelines(){
+  // Called when main phase dates change — refresh any locked shape grids
+  ['stg','road'].forEach(prefix=>{
+    const chk=document.getElementById(prefix+'-match-chk');
+    if(chk&&chk.checked) buildShapePhaseGrid(prefix, true);
+  });
+}
+
+function getShapeTimeline(prefix){
+  // Returns phaseSchedule array for this shape type
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  const entries=[];
+  phases.forEach(ph=>{
+    const s=document.getElementById(prefix+'-'+ph+'-start')?.value;
+    const e=document.getElementById(prefix+'-'+ph+'-end')?.value;
+    if(s&&e) entries.push({phase:ph,start:s,end:e});
+  });
+  // Overall start/end from first/last entry
+  if(entries.length){
+    return {
+      start:entries[0].start,
+      end:entries[entries.length-1].end,
+      phaseSchedule:entries
+    };
   }
+  // Fallback to main project schedule
+  const sched=readPhaseSchedule();
   return {
-    start:document.getElementById(type+'-start')?.value||'',
-    end:document.getElementById(type+'-end')?.value||''
+    start:sched.entries[0]?.start||'',
+    end:sched.entries[sched.entries.length-1]?.end||'',
+    phaseSchedule:sched.entries
   };
 }
 
@@ -1320,12 +1356,14 @@ function setStagingYN(val){
   document.getElementById('yn-yes').classList.toggle('active',val);
   document.getElementById('yn-no').classList.toggle('active',!val);
   document.getElementById('stagingDrawTools').style.display=val?'block':'none';
+  if(val) buildShapePhaseGrid('stg', true);
 }
 function setRoadYN(val){
   roadYN=val;
   document.getElementById('yn-road-yes').classList.toggle('active',val);
   document.getElementById('yn-road-no').classList.toggle('active',!val);
   document.getElementById('roadDrawTools').style.display=val?'block':'none';
+  if(val) buildShapePhaseGrid('road', true);
 }
 
 // Slide wizard down and show banner so user can draw on map
@@ -1444,9 +1482,11 @@ function saveProject(){
   const allShapes=[
     ...wizExtentShapes,
     ...wizStagingShapes.map(s=>({...s,isStagingArea:true,
-      start:stagingTimeline.start,end:stagingTimeline.end})),
+      start:stagingTimeline.start,end:stagingTimeline.end,
+      phaseSchedule:stagingTimeline.phaseSchedule||[]})),
     ...wizRoadShapes.map(s=>({...s,isRoadClosure:true,
-      start:roadTimeline.start,end:roadTimeline.end}))
+      start:roadTimeline.start,end:roadTimeline.end,
+      phaseSchedule:roadTimeline.phaseSchedule||[]}))
   ];
   const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
     phase:startingPhase,start:startVal,end:endVal,desc:desc,
