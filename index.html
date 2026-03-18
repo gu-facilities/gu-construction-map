@@ -770,20 +770,28 @@ function buildPhaseSchedule(){
 }
 
 function syncPhaseOverlap(){
-  // Auto-fill next phase start = current phase end + 1 day
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
-  for(let i=0;i<phases.length-1;i++){
-    const endEl=document.getElementById('ps-'+phases[i]+'-end');
-    const nextStartEl=document.getElementById('ps-'+phases[i+1]+'-start');
-    if(endEl&&endEl.value&&nextStartEl&&!nextStartEl.value){
-      // Auto-suggest next phase starts day after previous ends
-      const d=new Date(endEl.value);
+  phases.forEach((ph,i)=>{
+    const startEl=document.getElementById('ps-'+ph+'-start');
+    const endEl=document.getElementById('ps-'+ph+'-end');
+    // If start is filled but end is empty → set end = start + 1 day
+    if(startEl&&startEl.value&&endEl&&!endEl.value){
+      const d=new Date(startEl.value);
       d.setDate(d.getDate()+1);
-      nextStartEl.value=d.toISOString().slice(0,10);
+      endEl.value=d.toISOString().slice(0,10);
     }
-  }
+    // If end is filled and there's a next phase with no start → set next start = end + 1 day
+    if(i<phases.length-1&&endEl&&endEl.value){
+      const nextStartEl=document.getElementById('ps-'+phases[i+1]+'-start');
+      if(nextStartEl&&!nextStartEl.value){
+        const d=new Date(endEl.value);
+        d.setDate(d.getDate()+1);
+        nextStartEl.value=d.toISOString().slice(0,10);
+      }
+    }
+  });
 }
 
 function readPhaseSchedule(){
