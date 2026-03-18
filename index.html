@@ -782,13 +782,23 @@ function syncPhaseOverlap(){
       d.setDate(d.getDate()+1);
       endEl.value=d.toISOString().slice(0,10);
     }
-    // If end is filled and there's a next phase with no start → set next start = end + 1 day
+    // Always cascade: if end is filled, overwrite next phase start = end + 1 day
+    // and if next phase start changed and next phase end is empty, fill that too
     if(i<phases.length-1&&endEl&&endEl.value){
       const nextStartEl=document.getElementById('ps-'+phases[i+1]+'-start');
-      if(nextStartEl&&!nextStartEl.value){
+      const nextEndEl=document.getElementById('ps-'+phases[i+1]+'-end');
+      if(nextStartEl){
         const d=new Date(endEl.value);
         d.setDate(d.getDate()+1);
-        nextStartEl.value=d.toISOString().slice(0,10);
+        const newNextStart=d.toISOString().slice(0,10);
+        // Only overwrite if it was previously auto-set or empty
+        nextStartEl.value=newNextStart;
+        // If next end is empty or was previously = next start, push it forward too
+        if(nextEndEl&&(!nextEndEl.value||nextEndEl.value===nextStartEl.value)){
+          const d2=new Date(newNextStart);
+          d2.setDate(d2.getDate()+1);
+          nextEndEl.value=d2.toISOString().slice(0,10);
+        }
       }
     }
   });
