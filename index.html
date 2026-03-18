@@ -187,6 +187,14 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .vtx-toolbar button:hover{background:#f0f4ff;}
 .vtx-toolbar button.danger{color:#c0304a;}
 .vtx-toolbar button.danger:hover{background:#fff0f2;}
+.phase-sched{display:flex;flex-direction:column;gap:6px;width:100%;}
+.phase-sched-row{background:#f8f9fb;border:1.5px solid #e4e8ee;border-radius:6px;padding:8px 10px;}
+.phase-sched-row.active-phase{border-color:var(--gold);background:#fffdf5;}
+.phase-sched-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+.phase-sched-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.phase-sched-dates{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.phase-sched-dates label{font-size:.62rem;color:#667;font-weight:600;}
+.phase-sched-dates input{width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);}
 .hint-toast{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(4,30,66,.88);color:var(--gold);font-size:.64rem;font-weight:600;padding:5px 16px;border-radius:12px;z-index:600;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .3s;}
 .hint-toast.show{opacity:1;}
 
@@ -406,14 +414,17 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
             <option>Maintenance &amp; Repair</option><option>Landscape</option>
             <option>ENGIE Project</option><option>Redgate Project</option>
           </select></div>
-        <div class="wf"><label>Phase</label>
-          <select id="wiz-phase">
-            <option value="charter">Charter</option><option value="design">Design</option>
-            <option value="pre">Preconstruction</option><option value="construction">Under Construction</option>
+        <div class="wf full"><label>Starting Phase <span style="color:#c0304a">*</span></label>
+          <select id="wiz-phase" onchange="buildPhaseSchedule()">
+            <option value="charter">Charter</option>
+            <option value="design">Design</option>
+            <option value="pre">Preconstruction</option>
+            <option value="construction">Under Construction</option>
             <option value="closeout">Closeout</option>
-          </select></div>
-        <div class="wf"><label>Start Date <span style="color:#c0304a">*</span></label><input type="date" id="wiz-start"></div>
-        <div class="wf"><label>End Date <span style="color:#c0304a">*</span></label><input type="date" id="wiz-end"></div>
+          </select>
+          <div style="font-size:.62rem;color:#889;margin-top:3px;">Select the phase the project is currently in. Date fields will appear for this phase and all subsequent phases.</div>
+        </div>
+        <div class="wf full" id="phaseScheduleGrid" style="margin-top:2px;"></div>
         <div class="wf full"><label>Description <span style="color:#c0304a">*</span></label>
           <textarea id="wiz-desc" placeholder="Brief description of project scope..."></textarea></div>
       </div>
@@ -501,6 +512,10 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
         <input type="date" id="edit-start"></div>
       <div class="wf"><label>End Date</label>
         <input type="date" id="edit-end"></div>
+      <div class="wf full" id="edit-phase-sched-wrap" style="margin-top:4px;">
+        <label style="font-size:.65rem;font-weight:700;color:#556;text-transform:uppercase;letter-spacing:.4px;">Phase Schedule</label>
+        <div id="edit-phase-sched" style="margin-top:5px;"></div>
+      </div>
       <div class="wf full"><label>Description</label>
         <textarea id="edit-desc" style="min-height:52px;resize:vertical;" placeholder="Project description..."></textarea></div>
     </div>
@@ -725,6 +740,89 @@ function hideVertexHandles(){
   if(_vtxMoveHandler){map.off('move zoom',_vtxMoveHandler);_vtxMoveHandler=null;}
 }
 
+// ── PHASE SCHEDULE ───────────────────────────────────────────────────
+const PHASE_ORDER=['charter','design','pre','construction','closeout'];
+const PHASE_LABELS={charter:'Charter',design:'Design',pre:'Preconstruction',construction:'Under Construction',closeout:'Closeout'};
+
+function buildPhaseSchedule(){
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  const grid=document.getElementById('phaseScheduleGrid');
+  if(!grid)return;
+  grid.innerHTML='<div class="phase-sched">'+phases.map((ph,i)=>{
+    const col=PHASES[ph].color;
+    const isFirst=(i===0);
+    return `<div class="phase-sched-row${isFirst?' active-phase':''}">
+      <div class="phase-sched-label">
+        <div class="phase-sched-dot" style="background:${col}"></div>
+        <span style="color:${col}">${PHASE_LABELS[ph]}</span>
+        ${isFirst?'<span style="font-size:.55rem;color:#C9A96E;font-weight:700;margin-left:auto;">CURRENT</span>':''}
+      </div>
+      <div class="phase-sched-dates">
+        <div><label>Start Date <span style="color:#c0304a">*</span></label>
+          <input type="date" id="ps-${ph}-start" onchange="syncPhaseOverlap()"></div>
+        <div><label>End Date <span style="color:#c0304a">*</span></label>
+          <input type="date" id="ps-${ph}-end" onchange="syncPhaseOverlap()"></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function syncPhaseOverlap(){
+  // Auto-fill next phase start = current phase end + 1 day
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  for(let i=0;i<phases.length-1;i++){
+    const endEl=document.getElementById('ps-'+phases[i]+'-end');
+    const nextStartEl=document.getElementById('ps-'+phases[i+1]+'-start');
+    if(endEl&&endEl.value&&nextStartEl&&!nextStartEl.value){
+      // Auto-suggest next phase starts day after previous ends
+      const d=new Date(endEl.value);
+      d.setDate(d.getDate()+1);
+      nextStartEl.value=d.toISOString().slice(0,10);
+    }
+  }
+}
+
+function readPhaseSchedule(){
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  const entries=[];
+  const errors=[];
+  let prevEnd=null;
+  phases.forEach(ph=>{
+    const s=document.getElementById('ps-'+ph+'-start')?.value;
+    const e=document.getElementById('ps-'+ph+'-end')?.value;
+    if(!s) errors.push('• '+PHASE_LABELS[ph]+' Start Date');
+    if(!e) errors.push('• '+PHASE_LABELS[ph]+' End Date');
+    if(s&&e&&new Date(e)<=new Date(s)){
+      errors.push('• '+PHASE_LABELS[ph]+': End Date must be after Start Date');
+    }
+    if(s&&e) entries.push({phase:ph,start:s,end:e});
+  });
+  return {entries,errors};
+}
+
+// Determine active phase for a project at a given date
+function getActivePhase(project, date){
+  if(!project.phaseSchedule||!project.phaseSchedule.length) return project.phase;
+  const d=new Date(date);
+  // Find the phase whose window contains the date
+  for(const entry of project.phaseSchedule){
+    const s=new Date(entry.start), e=new Date(entry.end);
+    if(d>=s&&d<=e) return entry.phase;
+  }
+  // Before first phase starts → first phase
+  const first=project.phaseSchedule[0];
+  if(d<new Date(first.start)) return first.phase;
+  // After last phase ends → last phase
+  const last=project.phaseSchedule[project.phaseSchedule.length-1];
+  return last.phase;
+}
+
 async function manualRefresh(){
   const btn=document.getElementById('refreshBtn');
   const icon=document.getElementById('refreshIcon');
@@ -767,12 +865,14 @@ function refreshMap(){
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(!showAllProjects&&(ps>_we||pe<_ws))return;
-    const col=PHASES[p.phase].color;
+    // Determine active phase based on timeline midpoint
     const midMonth=new Date((_ws.getTime()+_we.getTime())/2);
+    const activePhase=getActivePhase(p, midMonth);
+    const col=(PHASES[activePhase]||PHASES[p.phase]).color;
     const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
     function buildPop(shapeLabel){
       return `<strong>${p.name}</strong>${p.manager?`<br><span style='font-size:.65rem;opacity:.75'>👤 ${p.manager}</span>`:''}
-      <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${PHASES[p.phase].label}</span>
+      <span style="display:inline-block;background:${col};color:#fff;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-bottom:4px">${(PHASES[activePhase]||PHASES[p.phase]).label}</span>
       <span style="display:inline-block;background:#f0f4ff;color:#445;font-size:.55rem;font-weight:700;padding:1px 6px;border-radius:8px;text-transform:uppercase;margin-left:3px;margin-bottom:4px;">${shapeLabel}</span><br>
       ${p.type}<br>${p.start.slice(0,7)} – ${p.end.slice(0,7)}<br>
       <div style="height:3px;background:#ffffff33;border-radius:2px;margin:5px 0 2px"><div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div></div>
@@ -1072,7 +1172,8 @@ function openWizard(){
   wizardOpen=true;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
   wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizRoadShapes=[];stagingYN=false;roadYN=false;
   document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
-  document.getElementById('wiz-start').value='';document.getElementById('wiz-end').value='';
+  document.getElementById('wiz-phase').value='charter';
+  buildPhaseSchedule();
   document.getElementById('drawnExtents').innerHTML='';document.getElementById('drawnStaging').innerHTML='';document.getElementById('drawnRoad').innerHTML='';
   document.getElementById('stagingDrawTools').style.display='none';document.getElementById('roadDrawTools').style.display='none';
   document.getElementById('yn-yes').classList.remove('active');document.getElementById('yn-no').classList.remove('active');
@@ -1202,32 +1303,32 @@ function removeWizShape(section,i){
 function saveProject(){
   const name=document.getElementById('wiz-name').value.trim();
   const manager=document.getElementById('wiz-manager').value.trim();
-  const startVal=document.getElementById('wiz-start').value;
-  const endVal=document.getElementById('wiz-end').value;
   const desc=document.getElementById('wiz-desc').value.trim();
+  const startingPhase=document.getElementById('wiz-phase').value;
 
-  // Validate all required fields
+  // Read phase schedule from grid
+  const phaseSchedule=readPhaseSchedule();
   const errors=[];
   if(!name)    errors.push('• Project Name');
   if(!manager) errors.push('• Project Manager');
-  if(!startVal) errors.push('• Start Date');
-  if(!endVal)   errors.push('• End Date');
-  if(!desc)     errors.push('• Description');
+  if(!desc)    errors.push('• Description');
+  if(phaseSchedule.errors.length) phaseSchedule.errors.forEach(e=>errors.push(e));
   if(!wizExtentShapes.length) errors.push('• Project Extents (mark at least one pin or area on the map)');
   if(errors.length){
-    alert('Please complete the following required fields:\n\n' + errors.join('\n'));
+    alert('Please complete the following required fields:\n\n'+errors.join('\n'));
     return;
   }
-  if(new Date(endVal) <= new Date(startVal)){
-    alert('End Date must be after Start Date.');
-    return;
-  }
+  // Overall start = first phase start, end = last phase end
+  const startVal=phaseSchedule.entries[0].start;
+  const endVal=phaseSchedule.entries[phaseSchedule.entries.length-1].end;
   const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
-  const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,phase:document.getElementById('wiz-phase').value,start:startVal,end:endVal,desc:desc,shapes:allShapes};
+  const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
+    phase:startingPhase,start:startVal,end:endVal,desc:desc,
+    phaseSchedule:phaseSchedule.entries,shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
   showHint(`Saving "${p.name}"…`,1500);
-  apiPost({action:'create',project:{...p,stagingYN:!!p.shapes.some(s=>s.isStagingArea),roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
+  apiPost({action:'create',project:{...p,phaseSchedule:p.phaseSchedule||[],stagingYN:!!p.shapes.some(s=>s.isStagingArea),roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
     if(res&&res.id){const idx=projects.findIndex(x=>x.id===p.id);if(idx>=0)projects[idx].id=res.id;renderSidebar();showHint(`✓ "${p.name}" saved`,2500);}
     else showHint(`⚠ Saved locally only`,3000);
   });
@@ -1262,6 +1363,8 @@ function openEditExtents(){
   }
   // Set phase dropdown
   document.getElementById('edit-phase').value = p.phase || 'construction';
+  // Build phase schedule editor
+  buildEditPhaseSchedule(p);
   renderEditShapes();
   document.getElementById('editPanel').classList.add('show');
   setTimeout(showVertexHandles, 100);
@@ -1506,6 +1609,45 @@ function finishEditDraw(){
   showVertexHandles();
 }
 
+function buildEditPhaseSchedule(p){
+  const container=document.getElementById('edit-phase-sched');
+  if(!container)return;
+  const schedule=p.phaseSchedule||[];
+  // Build rows for all phases that have schedule entries OR all from starting phase
+  const startPhase=p.phase||'charter';
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
+  container.innerHTML='<div class="phase-sched">'+phases.map(ph=>{
+    const entry=schedule.find(e=>e.phase===ph)||{};
+    const col=PHASES[ph].color;
+    return `<div class="phase-sched-row" style="border-color:${col}22;">
+      <div class="phase-sched-label">
+        <div class="phase-sched-dot" style="background:${col}"></div>
+        <span style="color:${col}">${PHASE_LABELS[ph]}</span>
+      </div>
+      <div class="phase-sched-dates">
+        <div><label>Start Date</label>
+          <input type="date" id="eps-${ph}-start" value="${entry.start||''}"></div>
+        <div><label>End Date</label>
+          <input type="date" id="eps-${ph}-end" value="${entry.end||''}"></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function readEditPhaseSchedule(p){
+  const startPhase=p.phase||'charter';
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
+  const entries=[];
+  phases.forEach(ph=>{
+    const s=document.getElementById('eps-'+ph+'-start')?.value;
+    const e=document.getElementById('eps-'+ph+'-end')?.value;
+    if(s&&e) entries.push({phase:ph,start:s,end:e});
+  });
+  return entries;
+}
+
 function closeEditPanel(save){
   if(save===true){
     const p=projects.find(x=>String(x.id)===String(editProjectId));
@@ -1516,9 +1658,17 @@ function closeEditPanel(save){
       p.manager = document.getElementById('edit-manager').value.trim();
       p.type    = document.getElementById('edit-type').value;
       p.phase   = document.getElementById('edit-phase').value;
-      p.start   = document.getElementById('edit-start').value;
-      p.end     = document.getElementById('edit-end').value;
       p.desc    = document.getElementById('edit-desc').value.trim();
+      // Read phase schedule; derive overall start/end from it
+      const sched=readEditPhaseSchedule(p);
+      if(sched.length){
+        p.phaseSchedule=sched;
+        p.start=sched[0].start;
+        p.end=sched[sched.length-1].end;
+      } else {
+        p.start = document.getElementById('edit-start').value;
+        p.end   = document.getElementById('edit-end').value;
+      }
       refreshMap();renderSidebar();updateStats();buildMiniLegend();
       apiPost({action:'update',project:{...p}});
       showHint(`✓ "${p.name}" updated`,2500);
@@ -1647,10 +1797,12 @@ function buildProjectsHTML(){
     const ps=new Date(p.start),pe=new Date(p.end);if(!showAllProjects&&(ps>_we||pe<_ws))return;
     count++;
     const midMonth=new Date(_ws.getTime()+((_we-_ws)/2));
-    const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100),col=PHASES[p.phase].color;
+    const activePhase=getActivePhase(p, midMonth);
+    const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
+    const col=(PHASES[activePhase]||PHASES[p.phase]).color;
     const opts=Object.entries(PHASES).filter(([k])=>k!=='staging'&&k!=='road').map(([k,v])=>`<option value="${k}"${k===p.phase?' selected':''}>${v.label}</option>`).join('');
     html+=`<div class="pcard" style="border-left-color:${col}" onclick="focusProject('${p.id}')" oncontextmenu="showContextMenu(event,'${p.id}')">
-      <span class="badge" style="background:${col}">${PHASES[p.phase].label}</span>
+      <span class="badge" style="background:${col}">${(PHASES[activePhase]||PHASES[p.phase]).label}</span>
       <div class="pname">${p.name}</div>
       <div class="pmeta">${p.type} · ${p.start.slice(0,7)} – ${p.end.slice(0,7)}</div>
       ${p.manager?`<div class="pmeta" style="color:#6a8aaa">👤 ${p.manager}</div>`:''}
@@ -1683,6 +1835,7 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 // ── INIT ────────────────────────────────────────────────────────────
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 buildTimeline();
+buildPhaseSchedule();
 (async()=>{
   showHint('Loading projects…',0);
   const loaded=await apiGet();
