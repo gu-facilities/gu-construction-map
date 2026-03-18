@@ -1555,8 +1555,8 @@ function startWizardDraw(section,drawTool){
     ?'Click to place points · Double-click to finish · or click Done Drawing'
     :'Click anywhere on the map to drop a pin · click Done Drawing when finished';
   document.getElementById('drawingBanner').classList.add('show');
-  if(isPoly){
-    // Canvas intercepts clicks directly (see dc.addEventListener block above)
+  if(isPoly||isLine){
+    // Canvas intercepts clicks for polygon and line drawing
     dc.style.pointerEvents='all';
     dc.style.cursor='crosshair';
     map.dragging.disable();
