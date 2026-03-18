@@ -1,152 +1,193 @@
 // ============================================================
 //  Georgetown Facilities Construction Map — Google Apps Script
-//  Paste this entire file into your Apps Script project.
-//  Deploy as a Web App: Execute as "Me", Access "Anyone".
+//  Replace ALL existing code with this, then redeploy.
 // ============================================================
 
 const SHEET_NAME = 'Projects';
 
-// Column order in the sheet
-const COLS = {
-  ID:          1,
-  NAME:        2,
-  TYPE:        3,
-  PHASE:       4,
-  START:       5,
-  END:         6,
-  DESC:        7,
-  SHAPES:      8,   // JSON string
-  STAGING_YN:  9,
-  ROAD_YN:     10,
-  CREATED_AT:  11,
-  UPDATED_AT:  12,
-};
+// Expected header row — order matters
+const HEADERS = [
+  'ID','Name','Project Manager','Type','Phase','Start','End','Description',
+  'Shapes (JSON)','Staging Area?','Road Closure?','Phase Schedule (JSON)','Created At','Updated At'
+];
+
+// Column index map (1-based)
+const C = {};
+HEADERS.forEach(function(h,i){ C[h] = i+1; });
 
 function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_NAME);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
-    // Write header row
-    sheet.getRange(1, 1, 1, Object.keys(COLS).length).setValues([[
-      'ID','Name','Type','Phase','Start','End','Description',
-      'Shapes (JSON)','Staging Area?','Road Closure?','Created At','Updated At'
-    ]]);
+    sheet.getRange(1,1,1,HEADERS.length).setValues([HEADERS]);
     sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, Object.keys(COLS).length)
-      .setBackground('#041E42').setFontColor('#C9A96E').setFontWeight('bold');
+    styleHeader(sheet);
   }
   return sheet;
 }
 
+function styleHeader(sheet) {
+  sheet.getRange(1,1,1,HEADERS.length)
+    .setBackground('#041E42').setFontColor('#C9A96E').setFontWeight('bold');
+}
+
+// Ensures the sheet has ALL expected columns in the right order.
+// Safe to run on existing sheets — adds missing columns without losing data.
+function syncColumns() {
+  var sheet = getSheet();
+  var lastCol = sheet.getLastColumn();
+  var existing = lastCol > 0
+    ? sheet.getRange(1,1,1,lastCol).getValues()[0]
+    : [];
+
+  // Build a map of existing header -> column index
+  var existingMap = {};
+  existing.forEach(function(h,i){ if(h) existingMap[String(h).trim()] = i+1; });
+
+  // Insert any missing headers
+  HEADERS.forEach(function(h, targetIdx) {
+    if (!existingMap[h]) {
+      // Find where to insert: after the previous header's column
+      var insertAfter = targetIdx > 0 ? (existingMap[HEADERS[targetIdx-1]] || targetIdx) : 0;
+      if (insertAfter === 0) {
+        sheet.insertColumnBefore(1);
+        sheet.getRange(1,1).setValue(h);
+        existingMap[h] = 1;
+        // Shift all existing cols right
+        Object.keys(existingMap).forEach(function(k){ if(k!==h) existingMap[k]++; });
+      } else {
+        sheet.insertColumnAfter(insertAfter);
+        var newCol = insertAfter + 1;
+        sheet.getRange(1, newCol).setValue(h);
+        existingMap[h] = newCol;
+        Object.keys(existingMap).forEach(function(k){
+          if(k!==h && existingMap[k] > insertAfter) existingMap[k]++;
+        });
+      }
+    }
+  });
+
+  // Rebuild C map from actual sheet
+  var updatedHeaders = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  updatedHeaders.forEach(function(h,i){ if(h) C[String(h).trim()] = i+1; });
+
+  styleHeader(sheet);
+  return sheet;
+}
+
 function generateId() {
-  return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
 }
 
-// ── CORS helper ────────────────────────────────────────────
-function cors(output) {
-  return output
-    .setMimeType(ContentService.MimeType.JSON)
-    .addHeader('Access-Control-Allow-Origin', '*')
-    .addHeader('Access-Control-Allow-Methods', 'GET, POST')
-    .addHeader('Access-Control-Allow-Headers', 'Content-Type');
+function makeResponse(data) {
+  var out = ContentService.createTextOutput(JSON.stringify(data));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
 }
 
-// ── GET: return all projects ───────────────────────────────
 function doGet(e) {
   try {
-    const sheet = getSheet();
-    const data  = sheet.getDataRange().getValues();
-    if (data.length <= 1) {
-      return cors(ContentService.createTextOutput(JSON.stringify({ projects: [] })));
+    var sheet = syncColumns();
+    if (e.parameter && e.parameter.payload) {
+      var body = JSON.parse(decodeURIComponent(e.parameter.payload));
+      if (body.action==='create') return makeResponse(createProject(body.project, sheet));
+      if (body.action==='update') return makeResponse(updateProject(body.project, sheet));
+      if (body.action==='delete') return makeResponse(deleteProject(body.id, sheet));
+      return makeResponse({error:'Unknown action: '+body.action});
     }
-    const projects = data.slice(1).map(row => ({
-      id:         row[COLS.ID - 1],
-      name:       row[COLS.NAME - 1],
-      type:       row[COLS.TYPE - 1],
-      phase:      row[COLS.PHASE - 1],
-      start:      row[COLS.START - 1],
-      end:        row[COLS.END - 1],
-      desc:       row[COLS.DESC - 1],
-      shapes:     safeParseJSON(row[COLS.SHAPES - 1], []),
-      stagingYN:  row[COLS.STAGING_YN - 1] === 'yes',
-      roadYN:     row[COLS.ROAD_YN - 1] === 'yes',
-      createdAt:  row[COLS.CREATED_AT - 1],
-      updatedAt:  row[COLS.UPDATED_AT - 1],
-    })).filter(p => p.id);  // skip blank rows
-    return cors(ContentService.createTextOutput(JSON.stringify({ projects })));
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return makeResponse({projects:[]});
+    var projects = [];
+    for (var i=1; i<data.length; i++) {
+      var row = data[i];
+      if (!row[C['ID']-1]) continue;
+      projects.push({
+        id:        String(row[C['ID']-1]),
+        name:      row[C['Name']-1]             || '',
+        manager:   row[C['Project Manager']-1]  || '',
+        type:      row[C['Type']-1]             || '',
+        phase:     row[C['Phase']-1]            || '',
+        start:     row[C['Start']-1]            || '',
+        end:       row[C['End']-1]              || '',
+        desc:      row[C['Description']-1]      || '',
+        shapes:    safeParseJSON(row[C['Shapes (JSON)']-1], []),
+        stagingYN:     row[C['Staging Area?']-1]          === 'yes',
+        roadYN:        row[C['Road Closure?']-1]          === 'yes',
+        phaseSchedule: safeParseJSON(row[C['Phase Schedule (JSON)']-1], []),
+        createdAt: row[C['Created At']-1]       || '',
+        updatedAt: row[C['Updated At']-1]       || '',
+      });
+    }
+    return makeResponse({projects:projects});
   } catch(err) {
-    return cors(ContentService.createTextOutput(JSON.stringify({ error: err.message })));
+    return makeResponse({error:err.message});
   }
 }
 
-// ── POST: create, update or delete ────────────────────────
 function doPost(e) {
   try {
-    const body   = JSON.parse(e.postData.contents);
-    const action = body.action;  // 'create' | 'update' | 'delete'
-
-    if (action === 'create')  return cors(ContentService.createTextOutput(JSON.stringify(createProject(body.project))));
-    if (action === 'update')  return cors(ContentService.createTextOutput(JSON.stringify(updateProject(body.project))));
-    if (action === 'delete')  return cors(ContentService.createTextOutput(JSON.stringify(deleteProject(body.id))));
-    return cors(ContentService.createTextOutput(JSON.stringify({ error: 'Unknown action: ' + action })));
+    var body = JSON.parse(e.postData.contents);
+    var sheet = syncColumns();
+    if (body.action==='create') return makeResponse(createProject(body.project, sheet));
+    if (body.action==='update') return makeResponse(updateProject(body.project, sheet));
+    if (body.action==='delete') return makeResponse(deleteProject(body.id, sheet));
+    return makeResponse({error:'Unknown action: '+body.action});
   } catch(err) {
-    return cors(ContentService.createTextOutput(JSON.stringify({ error: err.message })));
+    return makeResponse({error:err.message});
   }
 }
 
-function createProject(p) {
-  const sheet = getSheet();
-  const id    = generateId();
-  const now   = new Date().toISOString();
-  sheet.appendRow([
-    id,
-    p.name        || '',
-    p.type        || '',
-    p.phase       || '',
-    p.start       || '',
-    p.end         || '',
-    p.desc        || '',
-    JSON.stringify(p.shapes || []),
-    p.stagingYN   ? 'yes' : 'no',
-    p.roadYN      ? 'yes' : 'no',
-    now, now
-  ]);
-  return { success: true, id };
+function createProject(p, sheet) {
+  var id  = generateId();
+  var now = new Date().toISOString();
+  var row = buildRow(id, p, now, now);
+  sheet.appendRow(row);
+  return {success:true, id:id};
 }
 
-function updateProject(p) {
-  const sheet = getSheet();
-  const data  = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][COLS.ID - 1] === p.id) {
-      const now = new Date().toISOString();
-      sheet.getRange(i + 1, COLS.NAME,       1, 1).setValue(p.name   || '');
-      sheet.getRange(i + 1, COLS.TYPE,       1, 1).setValue(p.type   || '');
-      sheet.getRange(i + 1, COLS.PHASE,      1, 1).setValue(p.phase  || '');
-      sheet.getRange(i + 1, COLS.START,      1, 1).setValue(p.start  || '');
-      sheet.getRange(i + 1, COLS.END,        1, 1).setValue(p.end    || '');
-      sheet.getRange(i + 1, COLS.DESC,       1, 1).setValue(p.desc   || '');
-      sheet.getRange(i + 1, COLS.SHAPES,     1, 1).setValue(JSON.stringify(p.shapes || []));
-      sheet.getRange(i + 1, COLS.STAGING_YN, 1, 1).setValue(p.stagingYN ? 'yes' : 'no');
-      sheet.getRange(i + 1, COLS.ROAD_YN,    1, 1).setValue(p.roadYN    ? 'yes' : 'no');
-      sheet.getRange(i + 1, COLS.UPDATED_AT, 1, 1).setValue(now);
-      return { success: true };
+function updateProject(p, sheet) {
+  var data = sheet.getDataRange().getValues();
+  for (var i=1; i<data.length; i++) {
+    if (String(data[i][C['ID']-1]) === String(p.id)) {
+      var now = new Date().toISOString();
+      var createdAt = data[i][C['Created At']-1];
+      var row = buildRow(p.id, p, createdAt, now);
+      sheet.getRange(i+1, 1, 1, row.length).setValues([row]);
+      return {success:true};
     }
   }
-  return { success: false, error: 'Project not found: ' + p.id };
+  return {success:false, error:'Not found: '+p.id};
 }
 
-function deleteProject(id) {
-  const sheet = getSheet();
-  const data  = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][COLS.ID - 1] === id) {
-      sheet.deleteRow(i + 1);
-      return { success: true };
+function deleteProject(id, sheet) {
+  var data = sheet.getDataRange().getValues();
+  for (var i=1; i<data.length; i++) {
+    if (String(data[i][C['ID']-1]) === String(id)) {
+      sheet.deleteRow(i+1);
+      return {success:true};
     }
   }
-  return { success: false, error: 'Project not found: ' + id };
+  return {success:false, error:'Not found: '+id};
+}
+
+function buildRow(id, p, createdAt, updatedAt) {
+  var row = new Array(HEADERS.length).fill('');
+  row[C['ID']-1]              = id;
+  row[C['Name']-1]            = p.name    || '';
+  row[C['Project Manager']-1] = p.manager || '';
+  row[C['Type']-1]            = p.type    || '';
+  row[C['Phase']-1]           = p.phase   || '';
+  row[C['Start']-1]           = p.start   || '';
+  row[C['End']-1]             = p.end     || '';
+  row[C['Description']-1]     = p.desc    || '';
+  row[C['Shapes (JSON)']-1]   = JSON.stringify(p.shapes || []);
+  row[C['Staging Area?']-1]        = p.stagingYN ? 'yes' : 'no';
+  row[C['Road Closure?']-1]        = p.roadYN    ? 'yes' : 'no';
+  row[C['Phase Schedule (JSON)']-1]= JSON.stringify(p.phaseSchedule || []);
+  row[C['Created At']-1]           = createdAt || new Date().toISOString();
+  row[C['Updated At']-1]           = updatedAt || new Date().toISOString();
+  return row;
 }
 
 function safeParseJSON(str, fallback) {
