@@ -958,6 +958,14 @@ function refreshMap(){
         L.marker([s.lat,s.lng],{icon}).bindPopup(buildPop(shapeLabel),{maxWidth:220}).addTo(markerGroup);
       } else if(s.type==='polygon'&&s.latlngs){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
+        // If shape has its own phaseSchedule, check if it's active in this window
+        if((isStaging||isRoad)&&s.phaseSchedule&&s.phaseSchedule.length){
+          const inWindow=s.phaseSchedule.some(entry=>{
+            const es=new Date(entry.start), ee=new Date(entry.end);
+            return es<=_we&&ee>=_ws;
+          });
+          if(!inWindow) return;
+        }
         const shapeLabel=isStaging?'Staging Area':isRoad?'Road Closure':'Project Extents';
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
@@ -1278,7 +1286,6 @@ function closeWizard(){
 }
 
 function buildShapePhaseGrid(prefix, matchDates){
-  // Build the same phase grid as the main schedule, pre-filled with same dates
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
@@ -1286,28 +1293,64 @@ function buildShapePhaseGrid(prefix, matchDates){
   if(!grid) return;
   const locked=document.getElementById(prefix+'-match-chk')?.checked;
 
+  // Preserve existing enabled/disabled state across rebuilds
+  const prevEnabled={};
+  phases.forEach(ph=>{
+    const chk=document.getElementById(prefix+'-'+ph+'-enabled');
+    if(chk) prevEnabled[ph]=chk.checked;
+  });
+
   grid.innerHTML='<div class="phase-sched">'+phases.map(ph=>{
     const col=PHASES[ph].color;
-    // Get dates from main schedule if matching, otherwise use existing values
     const mainStart=document.getElementById('ps-'+ph+'-start')?.value||'';
     const mainEnd=document.getElementById('ps-'+ph+'-end')?.value||'';
     const existStart=matchDates?mainStart:(document.getElementById(prefix+'-'+ph+'-start')?.value||mainStart);
     const existEnd=matchDates?mainEnd:(document.getElementById(prefix+'-'+ph+'-end')?.value||mainEnd);
-    return `<div class="phase-sched-row" style="border-color:${col}22;">
+    // Default enabled = true (preserve previous state if exists)
+    const isEnabled=(ph in prevEnabled)?prevEnabled[ph]:true;
+    const rowOpacity=isEnabled?'1':'0.4';
+    return `<div class="phase-sched-row" id="${prefix}-${ph}-row"
+        style="border-color:${col}22;opacity:${rowOpacity};">
       <div class="phase-sched-label">
         <div class="phase-sched-dot" style="background:${col}"></div>
         <span style="color:${col}">${PHASE_LABELS[ph]}</span>
+        <label style="display:flex;align-items:center;gap:4px;margin-left:auto;
+          font-size:.62rem;color:#667;font-weight:600;cursor:pointer;">
+          <input type="checkbox" id="${prefix}-${ph}-enabled"
+            ${isEnabled?'checked':''}
+            onchange="toggleShapePhaseEnabled('${prefix}','${ph}')"
+            style="accent-color:${col};width:12px;height:12px;cursor:pointer;">
+          Include
+        </label>
       </div>
-      <div class="phase-sched-dates">
+      <div class="phase-sched-dates" id="${prefix}-${ph}-dates"
+        style="${!isEnabled?'opacity:0.4;pointer-events:none;':''}">
         <div><label>Start Date</label>
           <input type="date" id="${prefix}-${ph}-start" value="${existStart}"
-            ${locked?'disabled style="background:#f8f9fb;color:#aaa;"':''}></div>
+            ${locked||!isEnabled?'disabled style="background:#f8f9fb;color:#aaa;"':''}></div>
         <div><label>End Date</label>
           <input type="date" id="${prefix}-${ph}-end" value="${existEnd}"
-            ${locked?'disabled style="background:#f8f9fb;color:#aaa;"':''}></div>
+            ${locked||!isEnabled?'disabled style="background:#f8f9fb;color:#aaa;"':''}></div>
       </div>
     </div>`;
   }).join('')+'</div>';
+}
+
+function toggleShapePhaseEnabled(prefix, ph){
+  const chk=document.getElementById(prefix+'-'+ph+'-enabled');
+  const row=document.getElementById(prefix+'-'+ph+'-row');
+  const dates=document.getElementById(prefix+'-'+ph+'-dates');
+  const startEl=document.getElementById(prefix+'-'+ph+'-start');
+  const endEl=document.getElementById(prefix+'-'+ph+'-end');
+  const locked=document.getElementById(prefix+'-match-chk')?.checked;
+  const enabled=chk.checked;
+  if(row) row.style.opacity=enabled?'1':'0.4';
+  if(dates){
+    dates.style.opacity=enabled?'1':'0.4';
+    dates.style.pointerEvents=enabled?'':'none';
+  }
+  if(startEl) startEl.disabled=!enabled||locked;
+  if(endEl)   endEl.disabled=!enabled||locked;
 }
 
 function toggleShapeTimeline(prefix){
@@ -1330,6 +1373,9 @@ function getShapeTimeline(prefix){
   const phases=PHASE_ORDER.slice(startIdx);
   const entries=[];
   phases.forEach(ph=>{
+    const enabledChk=document.getElementById(prefix+'-'+ph+'-enabled');
+    // If checkbox exists and is unchecked, skip this phase
+    if(enabledChk&&!enabledChk.checked) return;
     const s=document.getElementById(prefix+'-'+ph+'-start')?.value;
     const e=document.getElementById(prefix+'-'+ph+'-end')?.value;
     if(s&&e) entries.push({phase:ph,start:s,end:e});
