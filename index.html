@@ -768,6 +768,12 @@ const PHASE_LABELS={charter:'Charter/Procurement',design:'Design',pre:'Preconstr
 
 function buildPhaseSchedule(){
   _manuallyEdited.clear();
+  // Preserve existing enabled states across rebuilds
+  const prevEnabled={};
+  PHASE_ORDER.forEach(ph=>{
+    const chk=document.getElementById('ps-'+ph+'-enabled');
+    if(chk) prevEnabled[ph]=chk.checked;
+  });
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
@@ -776,20 +782,99 @@ function buildPhaseSchedule(){
   grid.innerHTML='<div class="phase-sched">'+phases.map((ph,i)=>{
     const col=PHASES[ph].color;
     const isFirst=(i===0);
-    return `<div class="phase-sched-row${isFirst?' active-phase':''}">
+    const isEnabled=(ph in prevEnabled)?prevEnabled[ph]:true;
+    return `<div class="phase-sched-row${isFirst?' active-phase':''}" id="ps-${ph}-row"
+        style="opacity:${isEnabled?1:0.4};">
       <div class="phase-sched-label">
         <div class="phase-sched-dot" style="background:${col}"></div>
         <span style="color:${col}">${PHASE_LABELS[ph]}</span>
-        ${isFirst?'<span style="font-size:.55rem;color:#C9A96E;font-weight:700;margin-left:auto;">CURRENT</span>':''}
+        ${isFirst?'<span style="font-size:.55rem;color:#C9A96E;font-weight:700;">CURRENT</span>':''}
+        <label style="display:flex;align-items:center;gap:4px;margin-left:auto;
+          font-size:.62rem;color:#667;font-weight:600;cursor:pointer;">
+          <input type="checkbox" id="ps-${ph}-enabled"
+            ${isEnabled?'checked':''}
+            ${isFirst?'disabled title="Starting phase cannot be disabled"':''}
+            onchange="toggleMainPhaseEnabled('${ph}')"
+            style="accent-color:${col};width:12px;height:12px;cursor:pointer;">
+          Include
+        </label>
       </div>
-      <div class="phase-sched-dates">
-        <div><label>Start Date <span style="color:#c0304a">*</span></label>
-          <input type="date" id="ps-${ph}-start" onchange="onPhaseDateChange('${ph}','start')"></div>
-        <div><label>End Date <span style="color:#c0304a">*</span></label>
-          <input type="date" id="ps-${ph}-end" onchange="onPhaseDateChange('${ph}','end')"></div>
+      <div class="phase-sched-dates" id="ps-${ph}-dates"
+        style="${!isEnabled?'opacity:0.4;pointer-events:none;':''}">
+        <div><label>Start Date${isEnabled?'<span style="color:#c0304a"> *</span>':''}</label>
+          <input type="date" id="ps-${ph}-start"
+            ${!isEnabled?'disabled style="background:#f8f9fb;color:#aaa;"':''}
+            onchange="onPhaseDateChange('${ph}','start')"></div>
+        <div><label>End Date${isEnabled?'<span style="color:#c0304a"> *</span>':''}</label>
+          <input type="date" id="ps-${ph}-end"
+            ${!isEnabled?'disabled style="background:#f8f9fb;color:#aaa;"':''}
+            onchange="onPhaseDateChange('${ph}','end')"></div>
       </div>
     </div>`;
   }).join('')+'</div>';
+}
+
+function toggleMainPhaseEnabled(ph){
+  const chk=document.getElementById('ps-'+ph+'-enabled');
+  const row=document.getElementById('ps-'+ph+'-row');
+  const dates=document.getElementById('ps-'+ph+'-dates');
+  const startEl=document.getElementById('ps-'+ph+'-start');
+  const endEl=document.getElementById('ps-'+ph+'-end');
+  const enabled=chk.checked;
+  if(row) row.style.opacity=enabled?'1':'0.4';
+  if(dates){dates.style.opacity=enabled?'1':'0.4';dates.style.pointerEvents=enabled?'':'none';}
+  if(startEl){startEl.disabled=!enabled;if(!enabled)startEl.style.cssText='background:#f8f9fb;color:#aaa;'
+    else startEl.style.cssText='';}
+  if(endEl){endEl.disabled=!enabled;if(!enabled)endEl.style.cssText='background:#f8f9fb;color:#aaa;'
+    else endEl.style.cssText='';}
+  // Re-cascade from previous enabled phase's end date
+  cascadeFromPrevEnabled(ph);
+  syncShapeTimelines();
+}
+
+function cascadeFromPrevEnabled(fromPh){
+  // Find the last enabled phase before fromPh and cascade forward
+  const startPhase=document.getElementById('wiz-phase').value;
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx);
+  const fromIdx=phases.indexOf(fromPh);
+  if(fromIdx<=0) return;
+  // Find previous enabled phase
+  let prevEnabledPh=null;
+  for(let i=fromIdx-1;i>=0;i--){
+    const chk=document.getElementById('ps-'+phases[i]+'-enabled');
+    if(!chk||chk.checked){prevEnabledPh=phases[i];break;}
+  }
+  if(!prevEnabledPh) return;
+  // Cascade from that phase's end date
+  const prevEnd=document.getElementById('ps-'+prevEnabledPh+'-end')?.value;
+  if(!prevEnd) return;
+  // Walk forward from fromPh, skipping disabled phases, setting start dates
+  for(let i=fromIdx;i<phases.length;i++){
+    const ph=phases[i];
+    const chk=document.getElementById('ps-'+ph+'-enabled');
+    if(chk&&!chk.checked) continue; // skip disabled
+    const startEl=document.getElementById('ps-'+ph+'-start');
+    const endEl=document.getElementById('ps-'+ph+'-end');
+    if(startEl&&!_manuallyEdited.has('ps-'+ph+'-start')){
+      // Find end of previous enabled phase
+      let refEnd=prevEnd;
+      for(let j=i-1;j>=0;j--){
+        const jchk=document.getElementById('ps-'+phases[j]+'-enabled');
+        if(!jchk||jchk.checked){
+          refEnd=document.getElementById('ps-'+phases[j]+'-end')?.value||refEnd;
+          break;
+        }
+      }
+      const d=new Date(refEnd);d.setDate(d.getDate()+1);
+      startEl.value=d.toISOString().slice(0,10);
+    }
+    if(startEl&&endEl&&!_manuallyEdited.has('ps-'+ph+'-end')){
+      const d=new Date(startEl.value);d.setDate(d.getDate()+1);
+      endEl.value=d.toISOString().slice(0,10);
+    }
+    break; // only update the first enabled phase after the toggle
+  }
 }
 
 // Track which fields were manually edited vs auto-filled
@@ -808,45 +893,43 @@ function cascadePhaseSchedule(changedPh, changedField){
   const changedIdx=phases.indexOf(changedPh);
   if(changedIdx===-1) return;
 
-  // Walk forward from the changed phase
+  // Walk forward from the changed phase, skipping disabled phases
   for(let i=changedIdx;i<phases.length;i++){
     const ph=phases[i];
+    const phEnabled=document.getElementById('ps-'+ph+'-enabled');
+    if(phEnabled&&!phEnabled.checked) continue; // skip disabled
     const startEl=document.getElementById('ps-'+ph+'-start');
     const endEl=document.getElementById('ps-'+ph+'-end');
 
     // If start just changed and end is not manually set → set end = start + 1 day
     if(startEl&&startEl.value&&endEl){
-      const endKey='ps-'+ph+'-end';
-      if(!_manuallyEdited.has(endKey)){
-        const d=new Date(startEl.value);
-        d.setDate(d.getDate()+1);
+      if(!_manuallyEdited.has('ps-'+ph+'-end')){
+        const d=new Date(startEl.value);d.setDate(d.getDate()+1);
         endEl.value=d.toISOString().slice(0,10);
       }
     }
 
-    // Sync shape timelines whenever main dates update
-    syncShapeTimelines();
-    // If end is set → push next phase start = end + 1 day (always overwrite auto-filled)
-    if(i<phases.length-1&&endEl&&endEl.value){
-      const nextPh=phases[i+1];
-      const nextStartEl=document.getElementById('ps-'+nextPh+'-start');
-      const nextEndEl=document.getElementById('ps-'+nextPh+'-end');
-      const nextStartKey='ps-'+nextPh+'-start';
-      const nextEndKey='ps-'+nextPh+'-end';
-
-      if(nextStartEl&&!_manuallyEdited.has(nextStartKey)){
-        const d=new Date(endEl.value);
-        d.setDate(d.getDate()+1);
-        nextStartEl.value=d.toISOString().slice(0,10);
-      }
-      // Also push next end forward if not manually set
-      if(nextStartEl&&nextEndEl&&!_manuallyEdited.has(nextEndKey)){
-        const d=new Date(nextStartEl.value);
-        d.setDate(d.getDate()+1);
-        nextEndEl.value=d.toISOString().slice(0,10);
+    // Find next ENABLED phase and push its start date
+    if(endEl&&endEl.value){
+      for(let j=i+1;j<phases.length;j++){
+        const nextPh=phases[j];
+        const nextEnabled=document.getElementById('ps-'+nextPh+'-enabled');
+        if(nextEnabled&&!nextEnabled.checked) continue; // skip disabled
+        const nextStartEl=document.getElementById('ps-'+nextPh+'-start');
+        const nextEndEl=document.getElementById('ps-'+nextPh+'-end');
+        if(nextStartEl&&!_manuallyEdited.has('ps-'+nextPh+'-start')){
+          const d=new Date(endEl.value);d.setDate(d.getDate()+1);
+          nextStartEl.value=d.toISOString().slice(0,10);
+        }
+        if(nextStartEl&&nextEndEl&&!_manuallyEdited.has('ps-'+nextPh+'-end')){
+          const d=new Date(nextStartEl.value);d.setDate(d.getDate()+1);
+          nextEndEl.value=d.toISOString().slice(0,10);
+        }
+        break; // only update the immediate next enabled phase
       }
     }
   }
+  syncShapeTimelines();
 }
 
 function syncPhaseOverlap(){
@@ -867,6 +950,8 @@ function readPhaseSchedule(){
   const errors=[];
   let prevEnd=null;
   phases.forEach(ph=>{
+    const enabledChk=document.getElementById('ps-'+ph+'-enabled');
+    if(enabledChk&&!enabledChk.checked) return; // skip disabled phases
     const s=document.getElementById('ps-'+ph+'-start')?.value;
     const e=document.getElementById('ps-'+ph+'-end')?.value;
     if(!s) errors.push('• '+PHASE_LABELS[ph]+' Start Date');
