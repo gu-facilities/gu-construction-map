@@ -454,6 +454,23 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
             <button class="wdbtn" id="wiz-btn-stg-pin"     onclick="startWizardDraw('staging','pin')">📍 Drop Pin</button>
           </div>
           <div class="drawn-items" id="drawnStaging"></div>
+          <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
+              <label style="display:flex;align-items:center;gap:5px;font-size:.68rem;color:#556;cursor:pointer;margin-left:auto;">
+                <input type="checkbox" id="stg-match-chk" checked onchange="toggleShapeTimeline('stg')"
+                  style="accent-color:var(--navy);width:13px;height:13px;cursor:pointer;">
+                Match Project Phasing Timeline
+              </label>
+            </div>
+            <div id="stg-custom-dates" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+              <div><label style="font-size:.62rem;color:#667;font-weight:600;">Start Date</label>
+                <input type="date" id="stg-start" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
+              <div><label style="font-size:.62rem;color:#667;font-weight:600;">End Date</label>
+                <input type="date" id="stg-end" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
+            </div>
+            <div id="stg-match-display" style="font-size:.65rem;color:#889;font-style:italic;">Using project phasing dates</div>
+          </div>
         </div>
       </div>
 
@@ -471,6 +488,23 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
             <button class="wdbtn" id="wiz-btn-road-pin"     onclick="startWizardDraw('road','pin')">📍 Drop Pin</button>
           </div>
           <div class="drawn-items" id="drawnRoad"></div>
+          <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
+              <label style="display:flex;align-items:center;gap:5px;font-size:.68rem;color:#556;cursor:pointer;margin-left:auto;">
+                <input type="checkbox" id="road-match-chk" checked onchange="toggleShapeTimeline('road')"
+                  style="accent-color:var(--navy);width:13px;height:13px;cursor:pointer;">
+                Match Project Phasing Timeline
+              </label>
+            </div>
+            <div id="road-custom-dates" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+              <div><label style="font-size:.62rem;color:#667;font-weight:600;">Start Date</label>
+                <input type="date" id="road-start" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
+              <div><label style="font-size:.62rem;color:#667;font-weight:600;">End Date</label>
+                <input type="date" id="road-end" style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);margin-top:2px;"></div>
+            </div>
+            <div id="road-match-display" style="font-size:.65rem;color:#889;font-style:italic;">Using project phasing dates</div>
+          </div>
         </div>
       </div>
 
@@ -1223,6 +1257,11 @@ function openWizard(){
   document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
   document.getElementById('wiz-phase').value='charter';
   buildPhaseSchedule();
+  // Reset shape timeline checkboxes
+  ['stg','road'].forEach(t=>{
+    const chk=document.getElementById(t+'-match-chk');
+    if(chk){chk.checked=true;toggleShapeTimeline(t);}
+  });
   document.getElementById('drawnExtents').innerHTML='';document.getElementById('drawnStaging').innerHTML='';document.getElementById('drawnRoad').innerHTML='';
   document.getElementById('stagingDrawTools').style.display='none';document.getElementById('roadDrawTools').style.display='none';
   document.getElementById('yn-yes').classList.remove('active');document.getElementById('yn-no').classList.remove('active');
@@ -1244,6 +1283,36 @@ function closeWizard(){
   dc.style.pointerEvents='none';dc.style.cursor='';
   map.dragging.enable();map.scrollWheelZoom.enable();
   redraw();
+}
+
+function toggleShapeTimeline(type){
+  const chk=document.getElementById(type+'-match-chk');
+  const customDiv=document.getElementById(type+'-custom-dates');
+  const matchDisplay=document.getElementById(type+'-match-display');
+  if(chk.checked){
+    customDiv.style.display='none';
+    matchDisplay.style.display='block';
+  } else {
+    customDiv.style.display='grid';
+    matchDisplay.style.display='none';
+  }
+}
+
+function getShapeTimeline(type){
+  // Returns {start, end} for staging or road closure
+  const chk=document.getElementById(type+'-match-chk');
+  if(!chk||chk.checked){
+    // Match project phasing — use overall project start/end from phase schedule
+    const sched=readPhaseSchedule();
+    if(sched.entries.length){
+      return {start:sched.entries[0].start, end:sched.entries[sched.entries.length-1].end};
+    }
+    return {start:'',end:''};
+  }
+  return {
+    start:document.getElementById(type+'-start')?.value||'',
+    end:document.getElementById(type+'-end')?.value||''
+  };
 }
 
 function setStagingYN(val){
@@ -1370,7 +1439,15 @@ function saveProject(){
   // Overall start = first phase start, end = last phase end
   const startVal=phaseSchedule.entries[0].start;
   const endVal=phaseSchedule.entries[phaseSchedule.entries.length-1].end;
-  const allShapes=[...wizExtentShapes,...wizStagingShapes.map(s=>({...s,isStagingArea:true})),...wizRoadShapes.map(s=>({...s,isRoadClosure:true}))];
+  const stagingTimeline=getShapeTimeline('stg');
+  const roadTimeline=getShapeTimeline('road');
+  const allShapes=[
+    ...wizExtentShapes,
+    ...wizStagingShapes.map(s=>({...s,isStagingArea:true,
+      start:stagingTimeline.start,end:stagingTimeline.end})),
+    ...wizRoadShapes.map(s=>({...s,isRoadClosure:true,
+      start:roadTimeline.start,end:roadTimeline.end}))
+  ];
   const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
     phase:startingPhase,start:startVal,end:endVal,desc:desc,
     phaseSchedule:phaseSchedule.entries,shapes:allShapes};
