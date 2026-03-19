@@ -1403,6 +1403,8 @@ function closeWizard(){
   document.getElementById('wizardOverlay').classList.remove('show');
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
+  map.off('click',onWizLineClick);
+  map.off('dblclick',onWizLineDblClick);
   dc.style.pointerEvents='none';dc.style.cursor='';
   map.dragging.enable();map.scrollWheelZoom.enable();
   redraw();
@@ -1555,13 +1557,27 @@ function startWizardDraw(section,drawTool){
     ?'Click to place points · Double-click to finish · or click Done Drawing'
     :'Click anywhere on the map to drop a pin · click Done Drawing when finished';
   document.getElementById('drawingBanner').classList.add('show');
-  if(isPoly||isLine){
-    // Canvas intercepts clicks for polygon and line drawing
-    dc.style.pointerEvents='all';
-    dc.style.cursor='crosshair';
+  if(isPoly){
+    // Polygon: canvas intercepts clicks
+    setTimeout(()=>{
+      dc.style.pointerEvents='all';
+      dc.style.cursor='crosshair';
+    },50);
     map.dragging.disable();
     map.scrollWheelZoom.disable();
     map.off('click',onWizMapClick);
+    map.off('dblclick',onWizLineDblClick);
+  } else if(isLine){
+    // Line: use Leaflet map clicks (same as pin but accumulate points)
+    dc.style.pointerEvents='none';
+    dc.style.cursor='crosshair';
+    map.dragging.enable();
+    map.scrollWheelZoom.enable();
+    map.off('click',onWizMapClick);
+    map.off('dblclick',onWizLineDblClick);
+    map.on('click',onWizLineClick);
+    map.on('dblclick',onWizLineDblClick);
+    wizardDrawing=true;
   } else {
     // Pin: canvas transparent, map fires clicks normally
     dc.style.pointerEvents='none';
@@ -1569,8 +1585,28 @@ function startWizardDraw(section,drawTool){
     map.dragging.enable();
     map.scrollWheelZoom.enable();
     map.off('click',onWizMapClick);
+    map.off('dblclick',onWizLineDblClick);
     map.on('click',onWizMapClick);
   }
+}
+
+function onWizLineClick(e){
+  if(!wizDrawContext||wizDrawContext.drawTool!=='line')return;
+  L.DomEvent.stopPropagation(e);
+  wizCurrentLLs.push([e.latlng.lat,e.latlng.lng]);
+  redraw();
+}
+
+function onWizLineDblClick(e){
+  if(!wizDrawContext||wizDrawContext.drawTool!=='line')return;
+  L.DomEvent.stopPropagation(e);
+  // Remove the last point added by the first click of the dblclick
+  if(wizCurrentLLs.length>0) wizCurrentLLs.pop();
+  if(wizCurrentLLs.length>=2){
+    commitWizPolygon();
+  }
+  map.off('click',onWizLineClick);
+  map.off('dblclick',onWizLineDblClick);
 }
 
 function restoreWizard(){
@@ -1587,6 +1623,8 @@ function finishWizardDraw(){
   wizardDrawing=false;wizCurrentLLs=[];
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
+  map.off('click',onWizLineClick);
+  map.off('dblclick',onWizLineDblClick);
   dc.style.pointerEvents='none';
   dc.style.cursor='';
   map.dragging.enable();
