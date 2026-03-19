@@ -1248,10 +1248,10 @@ function redraw(){
       if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
     wizStagingShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-diagonal');
     });
     wizRoadShapes.forEach(s=>{
-      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
+      if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-cross');
     });
     wizPedShapes.forEach(s=>{
       if(s.type==='line') drawLineOnCanvas(s.latlngs, wizCol);
@@ -1772,16 +1772,17 @@ function openEditExtents(){
 
 function renderEditShapes(){
   const p=projects.find(x=>x.id===editProjectId);if(!p)return;
-  const extents=[], staging=[], road=[];
+  const extents=[], staging=[], road=[], ped=[];
   p.shapes.forEach((s,i)=>{
     if(s.isStagingArea) staging.push({s,i});
     else if(s.isRoadClosure) road.push({s,i});
+    else if(s.isPedAccess) ped.push({s,i});
     else extents.push({s,i});
   });
   function buildList(arr, emptyMsg){
     if(!arr.length) return `<p style="font-size:.68rem;color:#bbb;padding:3px 0">${emptyMsg}</p>`;
     return arr.map(({s,i})=>`<div class="shape-row">
-      <span class="shape-lbl">${s.type==='pin'?'📍 Pin':'⬡ Area'} ${i+1}</span>
+      <span class="shape-lbl">${s.type==='pin'?'📍 Pin':s.type==='line'?'〰 Line':'⬡ Area'} ${i+1}</span>
       <div style="display:flex;gap:5px;">
         ${(s.type==='polygon'||s.type==='line')?`<button class="btn-del-shape" style="background:#e8f0ff;color:var(--navy);" onclick="editShapeVertices(${i})">✏️ Edit</button>`:''}
         <button class="btn-del-shape" onclick="deleteShape(${i})">🗑 Delete</button>
@@ -1791,6 +1792,8 @@ function renderEditShapes(){
   document.getElementById('editExtentsList').innerHTML = buildList(extents,'No extents yet');
   document.getElementById('editStagingList').innerHTML  = buildList(staging,'No staging areas yet');
   document.getElementById('editRoadList').innerHTML     = buildList(road,'No road closures yet');
+  const pedEl=document.getElementById('editPedList');
+  if(pedEl) pedEl.innerHTML=buildList(ped,'No pedestrian access lines yet');
 }
 
 function deleteShape(i){
