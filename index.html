@@ -1468,6 +1468,8 @@ function closeWizard(){
   wizardOpen=false;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
   wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];
   clearLinePreview();
+  document.getElementById('mapWrap').onclick=null;
+  document.getElementById('mapWrap').ondblclick=null;
   document.getElementById('wizardOverlay').classList.remove('show');
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
@@ -1624,6 +1626,25 @@ function startWizardDraw(section,drawTool){
   document.getElementById('bannerMsg').textContent=isPoly||isLine
     ?'Click to place points · Double-click to finish · or click Done Drawing'
     :'Click anywhere on the map to drop a pin · click Done Drawing when finished';
+  if(isLine){
+    // For line mode: also listen on mapWrap since canvas click may be blocked
+    document.getElementById('mapWrap').onclick=function(ev){
+      if(!wizardOpen||!wizDrawContext||wizDrawContext.drawTool!=='line')return;
+      const r=dc.getBoundingClientRect();
+      const x=ev.clientX-r.left, y=ev.clientY-r.top;
+      const ll=xyToLL(x,y);
+      if(!wizardDrawing){wizardDrawing=true;wizCurrentLLs=[];}
+      wizCurrentLLs.push(ll);
+      redraw();
+    };
+    document.getElementById('mapWrap').ondblclick=function(ev){
+      if(!wizardOpen||!wizDrawContext||wizDrawContext.drawTool!=='line')return;
+      if(wizCurrentLLs.length>0) wizCurrentLLs.pop();
+      if(wizCurrentLLs.length>=2) commitWizPolygon();
+      document.getElementById('mapWrap').onclick=null;
+      document.getElementById('mapWrap').ondblclick=null;
+    };
+  }
   document.getElementById('drawingBanner').classList.add('show');
   if(isPoly){
     // Polygon: canvas intercepts clicks
@@ -1663,25 +1684,13 @@ function onWizLineClick(e){}
 function onWizLineDblClick(e){}
 
 function updateLinePreview(){
-  // Remove old preview
-  if(previewPolyline){map.removeLayer(previewPolyline);previewPolyline=null;}
-  previewMarkers.forEach(m=>map.removeLayer(m));previewMarkers=[];
-  if(!wizardOpen||!wizDrawContext||wizDrawContext.drawTool!=='line'||!wizCurrentLLs.length)return;
-  const col=PHASES[document.getElementById('wiz-phase')?.value||'construction']?.color||'#888';
-  // Draw the committed points
-  previewPolyline=L.polyline(wizCurrentLLs,{
-    color:col,weight:3,dashArray:'8,5',opacity:0.9
-  }).addTo(map);
-  // Draw vertex dots at each point
-  wizCurrentLLs.forEach(ll=>{
-    const m=L.circleMarker(ll,{radius:5,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(map);
-    previewMarkers.push(m);
-  });
+  // Line preview is drawn on canvas via redraw() — just trigger a redraw
+  redraw();
 }
 
 function clearLinePreview(){
-  if(previewPolyline){map.removeLayer(previewPolyline);previewPolyline=null;}
-  previewMarkers.forEach(m=>map.removeLayer(m));previewMarkers=[];
+  // Nothing to clear — canvas redraws handle it
+  redraw();
 }
 
 function restoreWizard(){
@@ -1697,6 +1706,8 @@ function finishWizardDraw(){
   }
   wizardDrawing=false;wizCurrentLLs=[];
   clearLinePreview();
+  document.getElementById('mapWrap').onclick=null;
+  document.getElementById('mapWrap').ondblclick=null;
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
   map.off('click',onWizLineClick);
