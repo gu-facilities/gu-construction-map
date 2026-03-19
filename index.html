@@ -1074,6 +1074,7 @@ function refreshMap(){
     p.shapes.forEach(s=>{
       // ── Pedestrian Access line ──────────────────────────────────────
       if(s.type==='line'&&s.latlngs&&s.latlngs.length>=2){
+        console.log('Rendering line:', s.latlngs.length, 'points, isPedAccess:', s.isPedAccess);
         // Check phase schedule visibility
         if(s.phaseSchedule&&s.phaseSchedule.length){
           const inWindow=s.phaseSchedule.some(entry=>
@@ -1706,6 +1707,7 @@ function saveProject(){
   const stagingTimeline=getShapeTimeline('stg');
   const roadTimeline=getShapeTimeline('road');
   const pedTimeline=getShapeTimeline('ped');
+  console.log('wizPedShapes before save:', JSON.stringify(wizPedShapes));
   const allShapes=[
     ...wizExtentShapes,
     ...wizStagingShapes.map(s=>({...s,isStagingArea:true,
@@ -1718,6 +1720,7 @@ function saveProject(){
       start:pedTimeline.start,end:pedTimeline.end,
       phaseSchedule:pedTimeline.phaseSchedule||[]}))
   ];
+  console.log('allShapes after build:', JSON.stringify(allShapes.map(s=>({type:s.type,isPedAccess:s.isPedAccess,latlngs:s.latlngs?.length}))));
   const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
     phase:startingPhase,start:startVal,end:endVal,desc:desc,
     phaseSchedule:phaseSchedule.entries,shapes:allShapes};
