@@ -1568,15 +1568,15 @@ function startWizardDraw(section,drawTool){
     map.off('click',onWizMapClick);
     map.off('dblclick',onWizLineDblClick);
   } else if(isLine){
-    // Line: use Leaflet map clicks (same as pin but accumulate points)
-    dc.style.pointerEvents='none';
+    // Line: disable dragging so clicks register properly, use canvas for cursor
+    dc.style.pointerEvents='all';
     dc.style.cursor='crosshair';
-    map.dragging.enable();
-    map.scrollWheelZoom.enable();
+    map.dragging.disable();
+    map.scrollWheelZoom.disable();
     map.off('click',onWizMapClick);
     map.off('dblclick',onWizLineDblClick);
-    map.on('click',onWizLineClick);
-    map.on('dblclick',onWizLineDblClick);
+    // Wire clicks through canvas (same pipeline as polygon)
+    // onWizLineClick is wired via dc.addEventListener below
     wizardDrawing=true;
   } else {
     // Pin: canvas transparent, map fires clicks normally
@@ -1590,24 +1590,9 @@ function startWizardDraw(section,drawTool){
   }
 }
 
-function onWizLineClick(e){
-  if(!wizDrawContext||wizDrawContext.drawTool!=='line')return;
-  L.DomEvent.stopPropagation(e);
-  wizCurrentLLs.push([e.latlng.lat,e.latlng.lng]);
-  redraw();
-}
-
-function onWizLineDblClick(e){
-  if(!wizDrawContext||wizDrawContext.drawTool!=='line')return;
-  L.DomEvent.stopPropagation(e);
-  // Remove the last point added by the first click of the dblclick
-  if(wizCurrentLLs.length>0) wizCurrentLLs.pop();
-  if(wizCurrentLLs.length>=2){
-    commitWizPolygon();
-  }
-  map.off('click',onWizLineClick);
-  map.off('dblclick',onWizLineDblClick);
-}
+// Line drawing now handled by canvas click (same as polygon)
+function onWizLineClick(e){}
+function onWizLineDblClick(e){}
 
 function restoreWizard(){
   document.getElementById('wizardPanel').classList.remove('hidden-for-drawing');
