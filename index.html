@@ -773,7 +773,7 @@ function showVertexHandles(){
   vertexGroup.clearLayers();
   const p=projects.find(x=>String(x.id)===String(editProjectId));if(!p)return;
   p.shapes.forEach((s,si)=>{
-    if(s.type!=='polygon'||!s.latlngs)return;
+    if((s.type!=='polygon'&&s.type!=='line')||!s.latlngs)return;
     s.latlngs.forEach((ll,vi)=>{
       const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
       const icon=L.divIcon({className:'',html:'<div class="vertex-handle"></div>',iconSize:[10,10],iconAnchor:[5,5]});
@@ -1259,7 +1259,7 @@ function redraw(){
   }
 
   // ── In-progress wizard polygon (dashed preview) ──────────────────
-  if(wizardDrawing&&wizCurrentLLs.length){
+  if((wizardDrawing||wizardOpen)&&wizCurrentLLs.length){
     const pts=wizCurrentLLs.map(ll=>llToXY(ll[0],ll[1]));
     ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
     pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
@@ -1806,7 +1806,7 @@ function editShapeVertices(shapeIndex){
   vertexGroup.clearLayers();
   const p=projects.find(x=>String(x.id)===String(editProjectId));if(!p)return;
   const s=p.shapes[shapeIndex];
-  if(!s||s.type!=='polygon'||!s.latlngs)return;
+  if(!s||(s.type!=='polygon'&&s.type!=='line')||!s.latlngs)return;
   _editShape=s; _editProject=p;
 
   const col=PHASES[p.phase]?.color||'#C9A96E';
@@ -1848,7 +1848,8 @@ function vtxDeleteSelected(){
   vtxToolbar.classList.remove('show');
   const vi=vtxToolbar._vi;
   if(!_vtxShape||vi===null||vi===undefined)return;
-  if(_vtxShape.latlngs.length<=3){showHint('A polygon needs at least 3 points',2000);return;}
+  const _minPts=_vtxShape.type==='line'?2:3;
+  if(_vtxShape.latlngs.length<=_minPts){showHint(`Minimum ${_minPts} points required`,2000);return;}
   _vtxShape.latlngs.splice(vi,1);
   refreshMap();
   apiPost({action:'update',project:{..._vtxProject}});
