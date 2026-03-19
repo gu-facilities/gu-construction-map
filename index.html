@@ -1170,6 +1170,14 @@ function syncCanvas(){const r=document.getElementById('mapWrap').getBoundingClie
 syncCanvas();
 window.addEventListener('resize',()=>{syncCanvas();redraw();});
 map.on('move zoom moveend zoomend resize',redraw);
+// Track mouse on map-wrap for line preview
+document.getElementById('mapWrap').addEventListener('mousemove',function(e){
+  if(wizardOpen&&wizDrawContext&&wizCurrentLLs.length){
+    const r=dc.getBoundingClientRect();
+    mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
+    redraw();
+  }
+});
 function llToXY(lat,lng){const p=map.latLngToContainerPoint(L.latLng(lat,lng));return[p.x,p.y];}
 function xyToLL(x,y){const ll=map.containerPointToLatLng(L.point(x,y));return[ll.lat,ll.lng];}
 
@@ -1298,7 +1306,7 @@ mapDiv.addEventListener('mousemove',e=>{
   if(wizardOpen&&wizDrawContext){
     const r=dc.getBoundingClientRect();
     mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
-    redraw();
+    if(wizCurrentLLs.length) redraw();
   }
   if(!mmMapPanning)return;
   const dx=e.clientX-mmMapLast.x, dy=e.clientY-mmMapLast.y;
@@ -1308,10 +1316,10 @@ mapDiv.addEventListener('mousemove',e=>{
 
 // Also capture mousemove on Leaflet's own container for preview
 map.getContainer().addEventListener('mousemove',e=>{
-  if(wizardOpen&&wizDrawContext&&wizCurrentLLs.length){
+  if(wizardOpen&&wizDrawContext){
     const r=dc.getBoundingClientRect();
     mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
-    redraw();
+    if(wizCurrentLLs.length) redraw(); // only redraw if points placed
   }
 });
 
