@@ -210,6 +210,13 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .tl-month .yr{font-size:.5rem;color:#b0bac8;}
 .tl-month.selected .mo{color:var(--navy);font-weight:700;}
 .tl-month.selected .yr{color:var(--navy);}
+/* Day-mode timeline */
+.tl-day{flex-shrink:0;width:18px;display:flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;padding:2px 0;border-radius:3px;transition:background .1s;position:relative;}
+.tl-day:hover{background:#f5f7fa;}
+.tl-day .dn{font-size:.46rem;color:#a0aab8;line-height:1.2;}
+.tl-day.selected .dn{color:var(--navy);font-weight:700;}
+.tl-day.month-start{border-left:1px solid #e0e4ea;}
+.tl-month-label{position:absolute;top:0;left:2px;font-size:.44rem;font-weight:700;color:#667;letter-spacing:.3px;white-space:nowrap;pointer-events:none;text-transform:uppercase;}
 .tl-cursor{width:3px;height:32px;background:var(--gold);border-radius:2px;position:absolute;top:0;pointer-events:none;}
 /* playback controls */
 .tl-controls{display:flex;align-items:center;gap:4px;flex-shrink:0;}
@@ -313,8 +320,9 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
             <option value="2">2×</option>
           </select>
           <select class="yr-sel" id="yrRange" onchange="buildTimeline()">
+            <option value="1" selected>1 Yr</option>
             <option value="3">3 Yrs</option>
-            <option value="5" selected>5 Yrs</option>
+            <option value="5">5 Yrs</option>
           </select>
           <label style="display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:#667;cursor:pointer;white-space:nowrap;user-select:none;margin-left:2px;">
             <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
@@ -652,8 +660,11 @@ let nextId=10;
 let tool='pan',currentPhase='construction';
 let visibleStages=new Set(Object.keys(PHASES).filter(k=>k!=='staging'&&k!=='road'));
 let visibleTypes=new Set(['New Construction (Building, Structure, etc.)','Renovation','Infrastructure','Maintenance & Repair','Landscape','ENGIE Project','Redgate Project']);
-const _now=new Date();let tlStart=new Date(_now.getFullYear(),_now.getMonth(),1),tlMonths=60,tlSelectedMonth=0;
+const _now=new Date();let tlStart=new Date(_now.getFullYear(),_now.getMonth(),1),tlMonths=12,tlSelectedMonth=0;
 let filterStart=null,filterEnd=null,tlWindowMonths=1;
+let dayMode=false; // true when 1 Yr selected — timeline shows individual days
+let tlSelectedDay=0; // index into day array when dayMode=true
+let tlDayCount=365;  // total days in day-mode track
 let showAllProjects=false;
 let activeTab='projects',contextProjectId=null;
 let mouseCanvasPos=null;
@@ -1035,9 +1046,7 @@ function setBaseLayer(type,btn){
 // ── MAP REFRESH ──────────────────────────────────────────────────────
 function refreshMap(){
   markerGroup.clearLayers();polygonGroup.clearLayers();
-  const _ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
-  const _we=filterEnd||(()=>{const d=new Date(_ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
-  projects.forEach(p=>{
+  const {ws:_ws,we:_we}=getTlWindow();
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(!showAllProjects&&(ps>_we||pe<_ws))return;
@@ -2151,7 +2160,7 @@ document.addEventListener('click',()=>ctxMenu.style.display='none');
 function showContextMenu(e,id){e.preventDefault();e.stopPropagation();contextProjectId=id;ctxMenu.style.display='block';ctxMenu.style.left=e.clientX+'px';ctxMenu.style.top=e.clientY+'px';}
 function confirmRemoveProject(){ctxMenu.style.display='none';document.getElementById('confirmOverlay').classList.add('show');}
 function closeConfirm(){document.getElementById('confirmOverlay').classList.remove('show');}
-function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(contextProjectId));closeConfirm();refreshMap();renderSidebar();updateStats();buildMiniLegend();apiPost({action:'delete',id:contextProjectId});}
+function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(contextProjectId));closeConfirm();map.closePopup();refreshMap();renderSidebar();updateStats();buildMiniLegend();apiPost({action:'delete',id:contextProjectId});}
 
 // ── TOGGLE FILTERS ──────────────────────────────────────────────────
 function setFilterWindow(){
@@ -2186,22 +2195,83 @@ function changePhase(id,v){const p=projects.find(x=>x.id===id);if(p){p.phase=v;r
 function focusProject(id){const p=projects.find(x=>x.id===id);if(!p)return;const pin=p.shapes.find(s=>s.type==='pin');if(pin)map.flyTo([pin.lat,pin.lng],18,{duration:.7});else if(p.shapes[0]?.latlngs){const b=L.latLngBounds(p.shapes[0].latlngs);map.flyToBounds(b,{padding:[40,40],duration:.7});}}
 
 // ── TIMELINE ────────────────────────────────────────────────────────
-function buildTimeline(){
-  const years=parseInt(document.getElementById('yrRange').value);
-  tlMonths=years*12; const __n=new Date(); tlStart=new Date(__n.getFullYear(),__n.getMonth(),1);
-  if(tlSelectedMonth>=tlMonths)tlSelectedMonth=0;
-  const track=document.getElementById('tlTrack');
-  track.innerHTML='';
-  const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';track.appendChild(cursor);
-  for(let i=0;i<tlMonths;i++){
-    const d=new Date(tlStart);d.setMonth(d.getMonth()+i);
-    const el=document.createElement('div');el.className='tl-month'+(i===tlSelectedMonth?' selected':'');el.dataset.idx=i;
-    el.innerHTML=`<span class="mo">${MONTHS[d.getMonth()]}</span><span class="yr">${d.getFullYear()}</span>`;
-    el.onclick=()=>selectMonth(i);
-    track.appendChild(el);
+// ── TIMELINE WINDOW HELPER ───────────────────────────────────────────
+// Returns {ws, we} — the current visible window start/end dates
+function getTlWindow(){
+  if(filterStart||filterEnd){
+    const ws=filterStart||(()=>{const d=new Date(tlStart);if(dayMode)d.setDate(d.getDate()+tlSelectedDay);else d.setMonth(d.getMonth()+tlSelectedMonth);return d;})();
+    const we=filterEnd||(()=>{const d=new Date(ws);d.setDate(d.getDate()+1);d.setHours(23,59,59,999);return d;})();
+    return {ws,we};
   }
-  positionCursor();
+  if(dayMode){
+    const ws=new Date(tlStart);ws.setDate(ws.getDate()+tlSelectedDay);ws.setHours(0,0,0,0);
+    const we=new Date(ws);we.setHours(23,59,59,999);
+    return {ws,we};
+  }
+  const ws=new Date(tlStart);ws.setMonth(ws.getMonth()+tlSelectedMonth);ws.setDate(1);ws.setHours(0,0,0,0);
+  const we=new Date(ws);we.setMonth(we.getMonth()+tlWindowMonths);we.setDate(0);we.setHours(23,59,59,999);
+  return {ws,we};
 }
+
+function buildTimeline(){
+  const val=document.getElementById('yrRange').value;
+  dayMode=(val==='1');
+  const __n=new Date();
+  tlStart=new Date(__n.getFullYear(),__n.getMonth(),1);
+
+  if(dayMode){
+    // Day mode: 365 ticks, each 18px wide
+    tlDayCount=365;
+    tlSelectedDay=0;
+    const track=document.getElementById('tlTrack');
+    track.innerHTML='';
+    const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';track.appendChild(cursor);
+    let lastMonth=-1;
+    for(let i=0;i<tlDayCount;i++){
+      const d=new Date(tlStart);d.setDate(d.getDate()+i);
+      const el=document.createElement('div');
+      const isMonthStart=(d.getDate()===1);
+      el.className='tl-day'+(i===0?' selected':'')+(isMonthStart?' month-start':'');
+      el.dataset.idx=i;
+      // Show day number; on month-start also show month label above
+      let inner=`<span class="dn">${d.getDate()}</span>`;
+      if(isMonthStart){
+        inner=`<span class="tl-month-label">${MONTHS[d.getMonth()]} ${d.getFullYear()}</span><span class="dn" style="margin-top:10px">${d.getDate()}</span>`;
+      }
+      el.innerHTML=inner;
+      el.onclick=(()=>{const idx=i;return()=>selectDay(idx);})();
+      track.appendChild(el);
+    }
+    positionCursor();
+  } else {
+    // Month mode: 3 or 5 year spans
+    const years=parseInt(val);
+    tlMonths=years*12;
+    if(tlSelectedMonth>=tlMonths)tlSelectedMonth=0;
+    const track=document.getElementById('tlTrack');
+    track.innerHTML='';
+    const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';track.appendChild(cursor);
+    for(let i=0;i<tlMonths;i++){
+      const d=new Date(tlStart);d.setMonth(d.getMonth()+i);
+      const el=document.createElement('div');el.className='tl-month'+(i===tlSelectedMonth?' selected':'');el.dataset.idx=i;
+      el.innerHTML=`<span class="mo">${MONTHS[d.getMonth()]}</span><span class="yr">${d.getFullYear()}</span>`;
+      el.onclick=(()=>{const idx=i;return()=>selectMonth(idx);})();
+      track.appendChild(el);
+    }
+    positionCursor();
+  }
+}
+
+function selectDay(idx){
+  tlSelectedDay=idx;
+  document.querySelectorAll('.tl-day').forEach(el=>el.classList.toggle('selected',+el.dataset.idx===idx));
+  positionCursor();
+  const scroll=document.getElementById('tlScroll');
+  const target=idx*18-scroll.clientWidth/2+9;
+  scroll.scrollTo({left:target,behavior:'smooth'});
+  refreshMap();updateStats();renderSidebar();
+}
+
 function selectMonth(idx){
   tlSelectedMonth=idx;
   document.querySelectorAll('.tl-month').forEach(el=>el.classList.toggle('selected',+el.dataset.idx===idx));
@@ -2214,14 +2284,25 @@ function selectMonth(idx){
 function positionCursor(){
   const c=document.getElementById('tlCursor');
   if(!c)return;
-  c.style.left=(tlSelectedMonth*46+22)+'px';
-  document.querySelectorAll('.tl-month').forEach(el=>{
-    const idx=parseInt(el.dataset.idx);
-    const inWin=idx>=tlSelectedMonth&&idx<tlSelectedMonth+tlWindowMonths;
-    el.style.background=inWin?'rgba(201,169,110,0.18)':'';
-    const mo=el.querySelector('.mo');
-    if(mo){mo.style.fontWeight=inWin?'700':'';mo.style.color=inWin?'var(--navy)':'#8a9ab0';}
-  });
+  if(dayMode){
+    c.style.left=(tlSelectedDay*18+8)+'px';
+    document.querySelectorAll('.tl-day').forEach(el=>{
+      const idx=parseInt(el.dataset.idx);
+      const inWin=(idx===tlSelectedDay);
+      el.style.background=inWin?'rgba(201,169,110,0.22)':'';
+      const dn=el.querySelector('.dn');
+      if(dn){dn.style.fontWeight=inWin?'700':'';dn.style.color=inWin?'var(--navy)':'#a0aab8';}
+    });
+  } else {
+    c.style.left=(tlSelectedMonth*46+22)+'px';
+    document.querySelectorAll('.tl-month').forEach(el=>{
+      const idx=parseInt(el.dataset.idx);
+      const inWin=idx>=tlSelectedMonth&&idx<tlSelectedMonth+tlWindowMonths;
+      el.style.background=inWin?'rgba(201,169,110,0.18)':'';
+      const mo=el.querySelector('.mo');
+      if(mo){mo.style.fontWeight=inWin?'700':'';mo.style.color=inWin?'var(--navy)':'#8a9ab0';}
+    });
+  }
 }
 
 // ── PLAYBACK ────────────────────────────────────────────────────────
@@ -2236,8 +2317,13 @@ function getPlayDelay(){const speed=parseFloat(document.getElementById('speedSel
 function startPlayInterval(){
   clearInterval(playInterval);
   playInterval=setInterval(()=>{
-    if(tlSelectedMonth<tlMonths-1){selectMonth(tlSelectedMonth+1);}
-    else{selectMonth(0);}
+    if(dayMode){
+      if(tlSelectedDay<tlDayCount-1){selectDay(tlSelectedDay+1);}
+      else{selectDay(0);}
+    } else {
+      if(tlSelectedMonth<tlMonths-1){selectMonth(tlSelectedMonth+1);}
+      else{selectMonth(0);}
+    }
   },getPlayDelay());
 }
 function advancePlay(){}
@@ -2247,8 +2333,7 @@ document.getElementById('speedSel').addEventListener('change',()=>{if(playing){s
 function switchTab(tab,btn){activeTab=tab;document.querySelectorAll('.sidebar-tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderSidebar();}
 function renderSidebar(){const el=document.getElementById('tabContent');if(activeTab==='projects')el.innerHTML=buildProjectsHTML();else el.innerHTML=buildLegendHTML();}
 function buildProjectsHTML(){
-  const _ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
-  const _we=filterEnd||(()=>{const d=new Date(_ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
+  const {ws:_ws,we:_we}=getTlWindow();
   const phaseOrder={charter:0,design:1,pre:2,construction:3,closeout:4};
   const sorted=[...projects].sort((a,b)=>{
     const po=(phaseOrder[a.phase]??99)-(phaseOrder[b.phase]??99);
@@ -2283,8 +2368,7 @@ function buildProjectsHTML(){
 function buildLegendHTML(){return '<div style="padding:4px 2px 10px;font-size:.62rem;font-weight:700;letter-spacing:.7px;color:#8a9ab0;text-transform:uppercase">Phase Colors</div>'+Object.entries(PHASES).map(([k,v])=>`<div class="leg-row"><div class="leg-sw" style="background:${v.color}"></div><span>${v.label}</span></div>`).join('');}
 function buildMiniLegend(){document.getElementById('miniLegend').innerHTML=Object.entries(PHASES).map(([k,v])=>`<div class="mleg-i"><div class="mleg-d" style="background:${v.color}"></div>${v.label}</div>`).join('');}
 function updateStats(){
-  const _ws=filterStart||(()=>{const d=new Date(tlStart);d.setMonth(d.getMonth()+tlSelectedMonth);d.setDate(1);d.setHours(0,0,0,0);return d;})();
-  const _we=filterEnd||(()=>{const d=new Date(_ws);d.setMonth(d.getMonth()+tlWindowMonths);d.setDate(0);d.setHours(23,59,59,999);return d;})();
+  const {ws:_ws,we:_we}=getTlWindow();
   let a=0,c=0,pr=0,pl=0;
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
