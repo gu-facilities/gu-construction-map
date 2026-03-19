@@ -587,6 +587,12 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <button class="wdbtn" onclick="startEditAddDraw('polygon','staging')">⬡ Draw Area</button>
           <button class="wdbtn" onclick="startEditAddDraw('pin','staging')">📍 Drop Pin</button>
         </div>
+        <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
+          </div>
+          <div id="edit-stg-phase-grid"></div>
+        </div>
       </div>
       <!-- Road Closure -->
       <div class="ep-section">
@@ -596,6 +602,12 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <button class="wdbtn" onclick="startEditAddDraw('polygon','road')">⬡ Draw Area</button>
           <button class="wdbtn" onclick="startEditAddDraw('pin','road')">📍 Drop Pin</button>
         </div>
+        <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
+          </div>
+          <div id="edit-road-phase-grid"></div>
+        </div>
       </div>
       <!-- Pedestrian Access -->
       <div class="ep-section">
@@ -603,6 +615,12 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
         <div class="shapes-list" id="editPedList"></div>
         <div class="ep-draw-tools">
           <button class="wdbtn" onclick="startEditAddDraw('line','ped')">〰 Draw Line</button>
+        </div>
+        <div class="shape-timeline-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:.68rem;font-weight:700;color:#445;text-transform:uppercase;letter-spacing:.4px;">Timeline</span>
+          </div>
+          <div id="edit-ped-phase-grid"></div>
         </div>
       </div>
     </div>
@@ -717,6 +735,9 @@ map.getPane('popupPane').style.overflow = 'visible';
 map.getPane('markerPane').style.zIndex  = 600;
 const markerGroup=L.layerGroup().addTo(map);
 const vertexGroup=L.layerGroup().addTo(map);
+// Preview polyline for line drawing (Leaflet-based, no canvas needed)
+let previewPolyline=null;
+let previewMarkers=[];
 const polygonGroup=L.layerGroup().addTo(map);
 
 // ── OVERLAP SELECTOR ─────────────────────────────────────────────────
@@ -1379,6 +1400,7 @@ dc.addEventListener('click',e=>{
   if(wizardOpen&&wizDrawContext&&(wizDrawContext.drawTool==='polygon'||wizDrawContext.drawTool==='line')){
     if(!wizardDrawing){wizardDrawing=true;wizCurrentLLs=[];}
     wizCurrentLLs.push(ll);
+    if(wizDrawContext.drawTool==='line') updateLinePreview();
     redraw();
     return;
   }
@@ -1445,6 +1467,7 @@ function openWizard(){
 function closeWizard(){
   wizardOpen=false;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
   wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];
+  clearLinePreview();
   document.getElementById('wizardOverlay').classList.remove('show');
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
@@ -1639,6 +1662,28 @@ function startWizardDraw(section,drawTool){
 function onWizLineClick(e){}
 function onWizLineDblClick(e){}
 
+function updateLinePreview(){
+  // Remove old preview
+  if(previewPolyline){map.removeLayer(previewPolyline);previewPolyline=null;}
+  previewMarkers.forEach(m=>map.removeLayer(m));previewMarkers=[];
+  if(!wizardOpen||!wizDrawContext||wizDrawContext.drawTool!=='line'||!wizCurrentLLs.length)return;
+  const col=PHASES[document.getElementById('wiz-phase')?.value||'construction']?.color||'#888';
+  // Draw the committed points
+  previewPolyline=L.polyline(wizCurrentLLs,{
+    color:col,weight:3,dashArray:'8,5',opacity:0.9
+  }).addTo(map);
+  // Draw vertex dots at each point
+  wizCurrentLLs.forEach(ll=>{
+    const m=L.circleMarker(ll,{radius:5,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(map);
+    previewMarkers.push(m);
+  });
+}
+
+function clearLinePreview(){
+  if(previewPolyline){map.removeLayer(previewPolyline);previewPolyline=null;}
+  previewMarkers.forEach(m=>map.removeLayer(m));previewMarkers=[];
+}
+
 function restoreWizard(){
   document.getElementById('wizardPanel').classList.remove('hidden-for-drawing');
   document.getElementById('wizardOverlay').style.pointerEvents='all';
@@ -1651,6 +1696,7 @@ function finishWizardDraw(){
     commitWizPolygon();
   }
   wizardDrawing=false;wizCurrentLLs=[];
+  clearLinePreview();
   document.getElementById('drawingBanner').classList.remove('show');
   map.off('click',onWizMapClick);
   map.off('click',onWizLineClick);
@@ -1676,6 +1722,7 @@ function commitWizPolygon(){
   if(shapeType==='polygon'&&wizCurrentLLs.length<3){wizCurrentLLs=[];wizardDrawing=false;return;}
   arr.push({type:shapeType,latlngs:[...wizCurrentLLs],isPedAccess:(section==='ped')});
   wizCurrentLLs=[];wizardDrawing=false;
+  clearLinePreview();
   updateDrawnItemsEl(arr,elId,section);
   redraw();
 }
@@ -1789,6 +1836,10 @@ function openEditExtents(){
   // Build phase schedule editor
   buildEditPhaseSchedule(p);
   renderEditShapes();
+  // Build timeline grids for staging/road/ped
+  buildEditShapeTimeline(p, 'stg', 'edit-stg-phase-grid');
+  buildEditShapeTimeline(p, 'road', 'edit-road-phase-grid');
+  buildEditShapeTimeline(p, 'ped', 'edit-ped-phase-grid');
   document.getElementById('editPanel').classList.add('show');
   setTimeout(showVertexHandles, 100);
 }
@@ -2075,6 +2126,77 @@ function readEditPhaseSchedule(p){
   return entries;
 }
 
+function buildEditShapeTimeline(p, shapeType, gridId){
+  const grid=document.getElementById(gridId);
+  if(!grid) return;
+  // Get existing phaseSchedule from first shape of this type
+  let existingSched=[];
+  p.shapes.forEach(s=>{
+    if(shapeType==='stg'&&s.isStagingArea&&s.phaseSchedule) existingSched=s.phaseSchedule;
+    if(shapeType==='road'&&s.isRoadClosure&&s.phaseSchedule) existingSched=s.phaseSchedule;
+    if(shapeType==='ped'&&s.isPedAccess&&s.phaseSchedule) existingSched=s.phaseSchedule;
+  });
+  // Fall back to project phase schedule
+  const baseSched=p.phaseSchedule||[];
+  const phases=baseSched.length?baseSched.map(e=>e.phase):
+    (()=>{const si=PHASE_ORDER.indexOf(p.phase);return PHASE_ORDER.slice(si>=0?si:0);})();
+  grid.innerHTML='<div class="phase-sched">'+phases.map(ph=>{
+    const col=PHASES[ph]?.color||'#888';
+    const baseEntry=baseSched.find(e=>e.phase===ph)||{};
+    const existEntry=existingSched.find(e=>e.phase===ph)||{};
+    const s=existEntry.start||baseEntry.start||'';
+    const e=existEntry.end||baseEntry.end||'';
+    const enabled=existingSched.length?!!existEntry.start:true;
+    return `<div class="phase-sched-row" style="opacity:${enabled?1:0.4};">
+      <div class="phase-sched-label">
+        <div class="phase-sched-dot" style="background:${col}"></div>
+        <span style="color:${col}">${PHASE_LABELS[ph]||ph}</span>
+        <label style="display:flex;align-items:center;gap:4px;margin-left:auto;font-size:.62rem;color:#667;font-weight:600;cursor:pointer;">
+          <input type="checkbox" id="esh-${gridId}-${ph}" ${enabled?'checked':''}
+            onchange="toggleEditShapePhase('${gridId}','${ph}')"
+            style="accent-color:${col};width:12px;height:12px;">Include
+        </label>
+      </div>
+      <div class="phase-sched-dates" id="esh-dates-${gridId}-${ph}" style="${!enabled?'opacity:0.4;pointer-events:none;':''}">
+        <div><label style="font-size:.62rem;color:#667;">Start Date</label>
+          <input type="date" id="esh-${gridId}-${ph}-start" value="${s}"
+            ${!enabled?'disabled':''} style="width:100%;padding:3px 5px;border:1px solid #dde2ea;border-radius:4px;font-size:.68rem;font-family:'Source Sans 3',sans-serif;margin-top:2px;"></div>
+        <div><label style="font-size:.62rem;color:#667;">End Date</label>
+          <input type="date" id="esh-${gridId}-${ph}-end" value="${e}"
+            ${!enabled?'disabled':''} style="width:100%;padding:3px 5px;border:1px solid #dde2ea;border-radius:4px;font-size:.68rem;font-family:'Source Sans 3',sans-serif;margin-top:2px;"></div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function toggleEditShapePhase(gridId, ph){
+  const chk=document.getElementById(`esh-${gridId}-${ph}`);
+  const dates=document.getElementById(`esh-dates-${gridId}-${ph}`);
+  const row=dates?.closest('.phase-sched-row');
+  const enabled=chk.checked;
+  if(row) row.style.opacity=enabled?'1':'0.4';
+  if(dates){dates.style.opacity=enabled?'1':'0.4';dates.style.pointerEvents=enabled?'':'none';}
+  const startEl=document.getElementById(`esh-${gridId}-${ph}-start`);
+  const endEl=document.getElementById(`esh-${gridId}-${ph}-end`);
+  if(startEl) startEl.disabled=!enabled;
+  if(endEl) endEl.disabled=!enabled;
+}
+
+function readEditShapeTimeline(gridId, p){
+  const baseSched=p.phaseSchedule||[];
+  const phases=baseSched.length?baseSched.map(e=>e.phase):
+    (()=>{const si=PHASE_ORDER.indexOf(p.phase);return PHASE_ORDER.slice(si>=0?si:0);})();
+  const entries=[];
+  phases.forEach(ph=>{
+    const chk=document.getElementById(`esh-${gridId}-${ph}`);
+    if(chk&&!chk.checked) return;
+    const s=document.getElementById(`esh-${gridId}-${ph}-start`)?.value;
+    const e=document.getElementById(`esh-${gridId}-${ph}-end`)?.value;
+    if(s&&e) entries.push({phase:ph,start:s,end:e});
+  });
+  return entries;
+}
+
 function closeEditPanel(save){
   if(save===true){
     const p=projects.find(x=>String(x.id)===String(editProjectId));
@@ -2096,6 +2218,24 @@ function closeEditPanel(save){
         p.start = document.getElementById('edit-start').value;
         p.end   = document.getElementById('edit-end').value;
       }
+      // Save shape timelines back to matching shapes
+      const stgSched=readEditShapeTimeline('edit-stg-phase-grid',p);
+      const roadSched=readEditShapeTimeline('edit-road-phase-grid',p);
+      const pedSched=readEditShapeTimeline('edit-ped-phase-grid',p);
+      p.shapes.forEach(s=>{
+        if(s.isStagingArea&&stgSched.length){
+          s.phaseSchedule=stgSched;
+          s.start=stgSched[0].start;s.end=stgSched[stgSched.length-1].end;
+        }
+        if(s.isRoadClosure&&roadSched.length){
+          s.phaseSchedule=roadSched;
+          s.start=roadSched[0].start;s.end=roadSched[roadSched.length-1].end;
+        }
+        if(s.isPedAccess&&pedSched.length){
+          s.phaseSchedule=pedSched;
+          s.start=pedSched[0].start;s.end=pedSched[pedSched.length-1].end;
+        }
+      });
       refreshMap();renderSidebar();updateStats();buildMiniLegend();
       apiPost({action:'update',project:{...p}});
       showHint(`✓ "${p.name}" updated`,2500);
