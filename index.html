@@ -1072,6 +1072,22 @@ function refreshMap(){
       <span style="font-size:.6rem;opacity:.7">${pct}% elapsed</span>`;
     }
     p.shapes.forEach(s=>{
+      // ── Pedestrian Access line ──────────────────────────────────────
+      if(s.type==='line'&&s.latlngs&&s.latlngs.length>=2){
+        // Check phase schedule visibility
+        if(s.phaseSchedule&&s.phaseSchedule.length){
+          const inWindow=s.phaseSchedule.some(entry=>
+            new Date(entry.start)<=_we&&new Date(entry.end)>=_ws);
+          if(!inWindow) return;
+        }
+        const polyline=L.polyline(s.latlngs,{
+          color:col,weight:4,opacity:0.9,
+          dashArray:'10,6',pane:'polygonPane'
+        }).addTo(polygonGroup);
+        polyline._projectId=p.id;
+        polyline._popContent=buildPop('Pedestrian Access');
+        return;
+      }
       if(s.type==='pin'){
         const shapeLabel=s.isStagingArea?'Staging Area':s.isRoadClosure?'Road Closure':'Project Extents';
         const icon=L.divIcon({className:'',html:`<div class="proj-dot" style="background:${col}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
