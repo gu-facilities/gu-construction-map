@@ -1047,6 +1047,7 @@ function setBaseLayer(type,btn){
 function refreshMap(){
   markerGroup.clearLayers();polygonGroup.clearLayers();
   const {ws:_ws,we:_we}=getTlWindow();
+  projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(!showAllProjects&&(ps>_we||pe<_ws))return;
