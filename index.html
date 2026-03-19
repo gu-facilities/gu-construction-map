@@ -1094,7 +1094,7 @@ function refreshMap(){
         const shapeLabel=isStaging?'Staging Area':isRoad?'Road Closure':'Project Extents';
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
-          fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0.01,
+          fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0,
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
@@ -1108,19 +1108,23 @@ function refreshMap(){
           clone.id=uid;
           clone.querySelectorAll('line').forEach(l=>l.setAttribute('stroke',col));
           defs.appendChild(clone);
+          // Apply hatch synchronously on the 'add' event — fires before first paint,
+          // so the polygon never renders with a solid fill (no flash).
           poly.on('add',function(){
             const el=poly.getElement();
-            if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
+            if(el){
+              el.setAttribute('fill','url(#'+uid+')');
+              el.setAttribute('fill-opacity','1');
+            }
           });
-          setTimeout(()=>{
-            const el=poly.getElement();
-            if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
-          },50);
+          // Also apply immediately in case the layer was already added
+          const el=poly.getElement();
+          if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
         }
       }
     });
   });
-  setTimeout(redraw, 50);
+  redraw();
 }
 
 // ── MAP CLICK: handles all polygon clicks + overlap detection ───────
