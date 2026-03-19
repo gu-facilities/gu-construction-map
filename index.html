@@ -174,7 +174,6 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .leaflet-popup-close-button{color:var(--gold) !important;font-size:16px !important;top:6px !important;right:8px !important;}
 .vertex-handle{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--gold);cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .1s;}
 .vertex-handle:hover{transform:scale(1.5);background:var(--gold);}
-/* vertex context menu removed — using inline delete buttons instead */
 /* Midpoint handle — smaller, diamond shape for adding vertices */
 .midpoint-handle{width:12px;height:12px;background:#fff3d4;border:2.5px solid var(--gold);transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,.4);cursor:crosshair;opacity:0.85;}
 .midpoint-handle:hover{opacity:1;background:var(--gold);transform:rotate(45deg) scale(1.4);}
@@ -386,9 +385,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
     </div>
   </div>
 </div>
-
-<!-- DRAWING BANNER (shows while drawing in wizard) -->
-
 
 <!-- WIZARD -->
 <div class="wizard-overlay" id="wizardOverlay">
@@ -664,7 +660,7 @@ let mouseCanvasPos=null;
 
 // Wizard state
 let wizardOpen=false,wizardDrawing=false;
-let wizDrawContext=null; // {section:'extents'|'staging', tool:'polygon'|'pin'}
+let wizDrawContext=null;
 let wizCurrentLLs=[];
 let wizExtentShapes=[],wizStagingShapes=[],wizRoadShapes=[],wizPedShapes=[];
 let stagingYN=false,roadYN=false;
@@ -682,20 +678,15 @@ const map=L.map('map',{center:[38.9072,-77.0741],zoom:17,layers:[satellite],doub
 map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
 
 // ── DRAGGABLE POPUPS ─────────────────────────────────────────────────
-// Works by updating the popup's anchor latlng as the user drags,
-// so Leaflet always knows where it is and repositions it correctly.
 map.on('popupopen', function(e) {
   var popup  = e.popup;
   var wrapper = popup.getElement();
   if (!wrapper || wrapper._dragSetup) return;
   wrapper._dragSetup = true;
-
   var isDragging = false;
   var startX, startY;
   var startLatLng;
-
   wrapper.style.cursor = 'move';
-
   wrapper.addEventListener('mousedown', function(e) {
     if (e.button !== 0) return;
     isDragging  = true;
@@ -706,18 +697,15 @@ map.on('popupopen', function(e) {
     e.preventDefault();
     e.stopPropagation();
   });
-
   document.addEventListener('mousemove', function(e) {
     if (!isDragging) return;
     var dx = e.clientX - startX;
     var dy = e.clientY - startY;
-    // Convert the original latlng to a pixel point, offset it, convert back
     var startPt  = map.latLngToContainerPoint(startLatLng);
     var newPt    = L.point(startPt.x + dx, startPt.y + dy);
     var newLatLng = map.containerPointToLatLng(newPt);
     popup.setLatLng(newLatLng);
   });
-
   document.addEventListener('mouseup', function() {
     if (isDragging) {
       isDragging = false;
@@ -725,17 +713,14 @@ map.on('popupopen', function(e) {
     }
   });
 });
-// Custom pane for polygons below canvas, popups stay above canvas at z:700
-// polygonPane above canvas (450) so Leaflet polygons + popups are fully interactive
+
 map.createPane('polygonPane');
-map.getPane('polygonPane').style.zIndex = 400;   // below canvas(450)
-// Popup pane: Leaflet default is 700, well above canvas
+map.getPane('polygonPane').style.zIndex = 400;
 map.getPane('popupPane').style.zIndex   = 700;
 map.getPane('popupPane').style.overflow = 'visible';
 map.getPane('markerPane').style.zIndex  = 600;
 const markerGroup=L.layerGroup().addTo(map);
 const vertexGroup=L.layerGroup().addTo(map);
-// Preview polyline for line drawing (Leaflet-based, no canvas needed)
 let previewPolyline=null;
 let previewMarkers=[];
 const polygonGroup=L.layerGroup().addTo(map);
@@ -768,7 +753,6 @@ function showOverlapMenu(matches, clientX, clientY, latlng){
   overlapMenu.style.top=(clientY+4)+'px';
   overlapMenu.style.display='block';
   _overlapMenuOpen=true;
-  // Close on next interaction outside menu
   setTimeout(()=>{
     function closeHandler(ev){
       if(!overlapMenu.contains(ev.target)){
@@ -824,7 +808,6 @@ const PHASE_LABELS={charter:'Charter/Procurement',design:'Design',pre:'Preconstr
 
 function buildPhaseSchedule(){
   _manuallyEdited.clear();
-  // Preserve existing enabled states across rebuilds
   const prevEnabled={};
   PHASE_ORDER.forEach(ph=>{
     const chk=document.getElementById('ps-'+ph+'-enabled');
@@ -883,37 +866,31 @@ function toggleMainPhaseEnabled(ph){
     else startEl.style.cssText='';}
   if(endEl){endEl.disabled=!enabled;if(!enabled)endEl.style.cssText='background:#f8f9fb;color:#aaa;'
     else endEl.style.cssText='';}
-  // Re-cascade from previous enabled phase's end date
   cascadeFromPrevEnabled(ph);
   syncShapeTimelines();
 }
 
 function cascadeFromPrevEnabled(fromPh){
-  // Find the last enabled phase before fromPh and cascade forward
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
   const fromIdx=phases.indexOf(fromPh);
   if(fromIdx<=0) return;
-  // Find previous enabled phase
   let prevEnabledPh=null;
   for(let i=fromIdx-1;i>=0;i--){
     const chk=document.getElementById('ps-'+phases[i]+'-enabled');
     if(!chk||chk.checked){prevEnabledPh=phases[i];break;}
   }
   if(!prevEnabledPh) return;
-  // Cascade from that phase's end date
   const prevEnd=document.getElementById('ps-'+prevEnabledPh+'-end')?.value;
   if(!prevEnd) return;
-  // Walk forward from fromPh, skipping disabled phases, setting start dates
   for(let i=fromIdx;i<phases.length;i++){
     const ph=phases[i];
     const chk=document.getElementById('ps-'+ph+'-enabled');
-    if(chk&&!chk.checked) continue; // skip disabled
+    if(chk&&!chk.checked) continue;
     const startEl=document.getElementById('ps-'+ph+'-start');
     const endEl=document.getElementById('ps-'+ph+'-end');
     if(startEl&&!_manuallyEdited.has('ps-'+ph+'-start')){
-      // Find end of previous enabled phase
       let refEnd=prevEnd;
       for(let j=i-1;j>=0;j--){
         const jchk=document.getElementById('ps-'+phases[j]+'-enabled');
@@ -929,15 +906,13 @@ function cascadeFromPrevEnabled(fromPh){
       const d=new Date(startEl.value);d.setDate(d.getDate()+1);
       endEl.value=d.toISOString().slice(0,10);
     }
-    break; // only update the first enabled phase after the toggle
+    break;
   }
 }
 
-// Track which fields were manually edited vs auto-filled
 const _manuallyEdited=new Set();
 
 function onPhaseDateChange(ph, field){
-  // Mark this field as manually edited
   _manuallyEdited.add('ps-'+ph+'-'+field);
   cascadePhaseSchedule(ph, field);
 }
@@ -948,29 +923,23 @@ function cascadePhaseSchedule(changedPh, changedField){
   const phases=PHASE_ORDER.slice(startIdx);
   const changedIdx=phases.indexOf(changedPh);
   if(changedIdx===-1) return;
-
-  // Walk forward from the changed phase, skipping disabled phases
   for(let i=changedIdx;i<phases.length;i++){
     const ph=phases[i];
     const phEnabled=document.getElementById('ps-'+ph+'-enabled');
-    if(phEnabled&&!phEnabled.checked) continue; // skip disabled
+    if(phEnabled&&!phEnabled.checked) continue;
     const startEl=document.getElementById('ps-'+ph+'-start');
     const endEl=document.getElementById('ps-'+ph+'-end');
-
-    // If start just changed and end is not manually set → set end = start + 1 day
     if(startEl&&startEl.value&&endEl){
       if(!_manuallyEdited.has('ps-'+ph+'-end')){
         const d=new Date(startEl.value);d.setDate(d.getDate()+1);
         endEl.value=d.toISOString().slice(0,10);
       }
     }
-
-    // Find next ENABLED phase and push its start date
     if(endEl&&endEl.value){
       for(let j=i+1;j<phases.length;j++){
         const nextPh=phases[j];
         const nextEnabled=document.getElementById('ps-'+nextPh+'-enabled');
-        if(nextEnabled&&!nextEnabled.checked) continue; // skip disabled
+        if(nextEnabled&&!nextEnabled.checked) continue;
         const nextStartEl=document.getElementById('ps-'+nextPh+'-start');
         const nextEndEl=document.getElementById('ps-'+nextPh+'-end');
         if(nextStartEl&&!_manuallyEdited.has('ps-'+nextPh+'-start')){
@@ -981,7 +950,7 @@ function cascadePhaseSchedule(changedPh, changedField){
           const d=new Date(nextStartEl.value);d.setDate(d.getDate()+1);
           nextEndEl.value=d.toISOString().slice(0,10);
         }
-        break; // only update the immediate next enabled phase
+        break;
       }
     }
   }
@@ -989,7 +958,6 @@ function cascadePhaseSchedule(changedPh, changedField){
 }
 
 function syncPhaseOverlap(){
-  // Legacy: full cascade from beginning (used on initial build)
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
@@ -1004,10 +972,9 @@ function readPhaseSchedule(){
   const phases=PHASE_ORDER.slice(startIdx);
   const entries=[];
   const errors=[];
-  let prevEnd=null;
   phases.forEach(ph=>{
     const enabledChk=document.getElementById('ps-'+ph+'-enabled');
-    if(enabledChk&&!enabledChk.checked) return; // skip disabled phases
+    if(enabledChk&&!enabledChk.checked) return;
     const s=document.getElementById('ps-'+ph+'-start')?.value;
     const e=document.getElementById('ps-'+ph+'-end')?.value;
     if(!s) errors.push('• '+PHASE_LABELS[ph]+' Start Date');
@@ -1020,19 +987,15 @@ function readPhaseSchedule(){
   return {entries,errors};
 }
 
-// Determine active phase for a project at a given date
 function getActivePhase(project, date){
   if(!project.phaseSchedule||!project.phaseSchedule.length) return project.phase;
   const d=new Date(date);
-  // Find the phase whose window contains the date
   for(const entry of project.phaseSchedule){
     const s=new Date(entry.start), e=new Date(entry.end);
     if(d>=s&&d<=e) return entry.phase;
   }
-  // Before first phase starts → first phase
   const first=project.phaseSchedule[0];
   if(d<new Date(first.start)) return first.phase;
-  // After last phase ends → last phase
   const last=project.phaseSchedule[project.phaseSchedule.length-1];
   return last.phase;
 }
@@ -1041,7 +1004,6 @@ async function manualRefresh(){
   const btn=document.getElementById('refreshBtn');
   const icon=document.getElementById('refreshIcon');
   btn.disabled=true;
-  // Spin the icon
   icon.style.transition='transform 0.6s linear';
   icon.style.transform='rotate(360deg)';
   showHint('Refreshing projects…',0);
@@ -1079,7 +1041,6 @@ function refreshMap(){
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(!showAllProjects&&(ps>_we||pe<_ws))return;
-    // Determine active phase based on timeline midpoint
     const midMonth=new Date((_ws.getTime()+_we.getTime())/2);
     const activePhase=getActivePhase(p, midMonth);
     const col=(PHASES[activePhase]||PHASES[p.phase]).color;
@@ -1093,9 +1054,7 @@ function refreshMap(){
       <span style="font-size:.6rem;opacity:.7">${pct}% elapsed</span>`;
     }
     p.shapes.forEach(s=>{
-      // ── Pedestrian Access line ──────────────────────────────────────
       if(s.type==='line'&&s.latlngs&&s.latlngs.length>=2){
-        // Check phase schedule visibility
         if(s.phaseSchedule&&s.phaseSchedule.length){
           const inWindow=s.phaseSchedule.some(entry=>
             new Date(entry.start)<=_we&&new Date(entry.end)>=_ws);
@@ -1115,7 +1074,6 @@ function refreshMap(){
         L.marker([s.lat,s.lng],{icon}).bindPopup(buildPop(shapeLabel),{maxWidth:220}).addTo(markerGroup);
       } else if(s.type==='polygon'&&s.latlngs){
         const isStaging=s.isStagingArea, isRoad=s.isRoadClosure;
-        // If shape has its own phaseSchedule, check if it's active in this window
         if((isStaging||isRoad)&&s.phaseSchedule&&s.phaseSchedule.length){
           const inWindow=s.phaseSchedule.some(entry=>{
             const es=new Date(entry.start), ee=new Date(entry.end);
@@ -1126,17 +1084,15 @@ function refreshMap(){
         const shapeLabel=isStaging?'Staging Area':isRoad?'Road Closure':'Project Extents';
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
-          fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0.01,  // >0 needed for Leaflet click detection
+          fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0.01,
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
         poly._projectId=p.id;
         poly._popContent=buildPop(shapeLabel);
-        // Apply SVG hatch pattern fill for staging/road
         if(isStaging||isRoad){
           const uid='pat_'+Math.random().toString(36).slice(2,7);
           const defs=document.querySelector('#hatch-staging').closest('defs');
-          // Create a unique pattern for this polygon with the correct color
           const template=document.getElementById(isStaging?'hatch-staging':'hatch-road');
           const clone=template.cloneNode(true);
           clone.id=uid;
@@ -1151,11 +1107,9 @@ function refreshMap(){
             if(el){el.setAttribute('fill','url(#'+uid+')');el.setAttribute('fill-opacity','1');}
           },50);
         }
-        // click handled by map.on('click') below
       }
     });
   });
-  // Always redraw canvas after map refreshes to keep hatch fills in sync
   setTimeout(redraw, 50);
 }
 
@@ -1167,7 +1121,6 @@ map.on('click',function(e){
   const matches=[];
   polygonGroup.eachLayer(function(layer){
     if(!layer._projectId||!layer._popContent) return;
-    // Unwrap Leaflet polygon rings to a flat array of LatLng
     const raw=layer.getLatLngs();
     const ring=(raw[0] instanceof L.LatLng)?raw:raw[0];
     if(ring&&ptInPoly(lat,lng,ring)){
@@ -1191,7 +1144,7 @@ function syncCanvas(){const r=document.getElementById('mapWrap').getBoundingClie
 syncCanvas();
 window.addEventListener('resize',()=>{syncCanvas();redraw();});
 map.on('move zoom moveend zoomend resize',redraw);
-// Track mouse on map-wrap for line preview
+
 document.getElementById('mapWrap').addEventListener('mousemove',function(e){
   if(wizardOpen&&wizDrawContext&&wizCurrentLLs.length){
     const r=dc.getBoundingClientRect();
@@ -1199,50 +1152,69 @@ document.getElementById('mapWrap').addEventListener('mousemove',function(e){
     redraw();
   }
 });
+
 function llToXY(lat,lng){const p=map.latLngToContainerPoint(L.latLng(lat,lng));return[p.x,p.y];}
 function xyToLL(x,y){const ll=map.containerPointToLatLng(L.point(x,y));return[ll.lat,ll.lng];}
 
+// ── FIX: drawLineOnCanvas — renders a committed ped access line on canvas ──
+// Used in redraw() for wizPedShapes preview during wizard drawing session.
+function drawLineOnCanvas(latlngs, col){
+  if(!latlngs||latlngs.length<2) return;
+  const pts=latlngs.map(ll=>{
+    const lat=Array.isArray(ll)?ll[0]:ll.lat;
+    const lng=Array.isArray(ll)?ll[1]:ll.lng;
+    return llToXY(lat,lng);
+  });
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
+  ctx.strokeStyle=col;
+  ctx.lineWidth=3.5;
+  ctx.setLineDash([10,6]);
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  ctx.globalAlpha=0.9;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha=1.0;
+  // Draw endpoint dots
+  [pts[0],pts[pts.length-1]].forEach(p=>{
+    ctx.beginPath();ctx.arc(p[0],p[1],5,0,Math.PI*2);
+    ctx.fillStyle=col;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  });
+  ctx.restore();
+}
+
 function drawPolygonOnCanvas(latlngs, col, closed, fillType){
-  // fillType: 'solid' | 'hatch-diagonal' | 'hatch-cross' | false
   if(!latlngs||!latlngs.length) return;
   const pts=latlngs.map(ll=>llToXY(ll[0],ll[1]));
-
-  // Draw outline
   ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
   pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
   if(closed) ctx.closePath();
   ctx.setLineDash([]);
   ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.stroke();
-
-  // Fill based on type
   if(closed && fillType) {
     if(fillType==='solid'){
       ctx.fillStyle=col+'28';ctx.fill();
     } else if(fillType==='hatch-diagonal' || fillType==='hatch-cross'){
-      // Clip to polygon shape then draw hatch lines
       ctx.save();
       ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
       pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
       ctx.closePath();ctx.clip();
-
-      // Get bounding box of polygon
       const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
       const minX=Math.min(...xs)-10, maxX=Math.max(...xs)+10;
       const minY=Math.min(...ys)-10, maxY=Math.max(...ys)+10;
       const span=Math.max(maxX-minX, maxY-minY);
-
       ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.globalAlpha=0.55;
-      const gap=10; // spacing between hatch lines
-
-      // Diagonal lines (45°) for staging
+      const gap=10;
       ctx.beginPath();
       for(let d=-(span);d<span*2;d+=gap){
         ctx.moveTo(minX+d, minY);
         ctx.lineTo(minX+d+span, minY+span);
       }
       ctx.stroke();
-
-      // Cross hatch (second set of lines at -45°) for road closure
       if(fillType==='hatch-cross'){
         ctx.beginPath();
         for(let d=-(span);d<span*2;d+=gap){
@@ -1251,26 +1223,20 @@ function drawPolygonOnCanvas(latlngs, col, closed, fillType){
         }
         ctx.stroke();
       }
-
       ctx.globalAlpha=1.0;
       ctx.restore();
     }
   }
-
-  // No vertex dots on completed shapes — cleaner map appearance
 }
 
 function redraw(){
   ctx.clearRect(0,0,dc.width,dc.height);
-  // Use wizard phase color when drawing, otherwise current phase
   const wizPhaseEl=document.getElementById('wiz-phase');
   const col=wizardDrawing&&wizPhaseEl?
     (PHASES[wizPhaseEl.value]||PHASES[currentPhase]).color:
     PHASES[currentPhase].color;
 
-  // Hatch fills removed — Leaflet handles all polygon fills directly
-
-  // ── Committed wizard shapes (extent + staging) ──────────────────
+  // ── Committed wizard shapes ──────────────────────────────────────
   if(wizardOpen){
     const wizCol=PHASES[document.getElementById('wiz-phase')?.value||'construction'].color;
     wizExtentShapes.forEach(s=>{
@@ -1282,18 +1248,23 @@ function redraw(){
     wizRoadShapes.forEach(s=>{
       if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'hatch-cross');
     });
+    // FIX: drawLineOnCanvas is now defined above — ped lines render correctly
     wizPedShapes.forEach(s=>{
       if(s.type==='line') drawLineOnCanvas(s.latlngs, wizCol);
     });
   }
 
-  // ── In-progress wizard polygon (dashed preview) ──────────────────
+  // ── In-progress wizard polygon/line (dashed preview) ──────────────────
   if((wizardDrawing||wizardOpen)&&wizCurrentLLs.length){
     const pts=wizCurrentLLs.map(ll=>llToXY(ll[0],ll[1]));
+    const isLine=wizDrawContext?.drawTool==='line';
     ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
     pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
     if(mouseCanvasPos)ctx.lineTo(mouseCanvasPos[0],mouseCanvasPos[1]);
-    ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([]);
+    ctx.strokeStyle=col;ctx.lineWidth=2.5;
+    ctx.setLineDash(isLine?[10,6]:[6,4]);
+    ctx.lineCap='round';
+    ctx.stroke();ctx.setLineDash([]);
     pts.forEach(p=>{ctx.beginPath();ctx.arc(p[0],p[1],5,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();});
   }
 
@@ -1309,7 +1280,7 @@ function redraw(){
   }
 }
 
-// ── MIDDLE-MOUSE PAN on map div (covers pan mode when canvas is transparent) ──
+// ── MIDDLE-MOUSE PAN on map div ──
 const mapDiv=document.getElementById('map');
 let mmMapPanning=false, mmMapLast={x:0,y:0};
 mapDiv.addEventListener('mousedown',e=>{
@@ -1323,7 +1294,6 @@ document.addEventListener('mouseup',e=>{
   mmMapPanning=false; mapDiv.style.cursor='';
 });
 mapDiv.addEventListener('mousemove',e=>{
-  // Track mouse position for canvas preview even when map intercepts events
   if(wizardOpen&&wizDrawContext){
     const r=dc.getBoundingClientRect();
     mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
@@ -1335,76 +1305,63 @@ mapDiv.addEventListener('mousemove',e=>{
   map.panBy([-dx,-dy],{animate:false});
 });
 
-// Also capture mousemove on Leaflet's own container for preview
 map.getContainer().addEventListener('mousemove',e=>{
   if(wizardOpen&&wizDrawContext){
     const r=dc.getBoundingClientRect();
     mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
-    if(wizCurrentLLs.length) redraw(); // only redraw if points placed
+    if(wizCurrentLLs.length) redraw();
   }
 });
 
-// ── TOOL (main map) ─────────────────────────────────────────────────
+// ── TOOL ─────────────────────────────────────────────────────────────
 function setTool(t){
   tool=t;
-  // Always ensure pan mode: canvas transparent, map dragging enabled
   dc.style.pointerEvents='none';dc.style.cursor='';
   map.dragging.enable();map.scrollWheelZoom.enable();
 }
 dc.addEventListener('wheel',e=>{const r=dc.getBoundingClientRect();const c=map.containerPointToLatLng([e.clientX-r.left,e.clientY-r.top]);map.setZoomAround(c,map.getZoom()+(e.deltaY<0?1:-1));redraw();},{passive:true});
 
-// ── MIDDLE-MOUSE PAN (works in all tool modes) ────────────────────
 let mmPanning=false, mmLast={x:0,y:0};
-
 dc.addEventListener('mousedown',e=>{
-  if(e.button!==1)return; // middle button only
+  if(e.button!==1)return;
   e.preventDefault();
   mmPanning=true;
   mmLast={x:e.clientX,y:e.clientY};
   dc.style.cursor='grabbing';
 });
-
 dc.addEventListener('mousemove',e=>{
   const r=dc.getBoundingClientRect();
   mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
   if(mmPanning){
     const dx=e.clientX-mmLast.x, dy=e.clientY-mmLast.y;
     mmLast={x:e.clientX,y:e.clientY};
-    // Pan by shifting the map view
     map.panBy([-dx,-dy],{animate:false});
   }
   redraw();
 });
-
 document.addEventListener('mouseup',e=>{
   if(e.button!==1||!mmPanning)return;
   mmPanning=false;
-  // Restore cursor based on current tool
   if(dc.style.pointerEvents==='all'){
     dc.style.cursor='crosshair';
   } else {
     dc.style.cursor='';
   }
 });
-
 dc.addEventListener('mouseleave',()=>{mouseCanvasPos=null;redraw();});
 
-// Canvas click/dblclick — handles BOTH wizard polygon drawing AND edit polygon drawing
-// (pin drawing goes through map.on('click') since canvas pointer-events are 'none' for pins)
+// Canvas click/dblclick
 dc.addEventListener('click',e=>{
   const r=dc.getBoundingClientRect();
   const x=e.clientX-r.left,y=e.clientY-r.top;
   const ll=xyToLL(x,y);
-
-  // Wizard polygon/line drawing
   if(wizardOpen&&wizDrawContext&&(wizDrawContext.drawTool==='polygon'||wizDrawContext.drawTool==='line')){
+    // FIX: Always ensure wizardDrawing=true and initialize array when first point placed
     if(!wizardDrawing){wizardDrawing=true;wizCurrentLLs=[];}
     wizCurrentLLs.push(ll);
-    if(wizDrawContext.drawTool==='line') updateLinePreview();
     redraw();
     return;
   }
-  // Edit polygon/line drawing
   if((editDrawTool==='polygon'||editDrawTool==='line')&&editProjectId){
     if(!editDrawing){editDrawing=true;editCurrentLLs=[];}
     editCurrentLLs.push(ll);redraw();
@@ -1414,15 +1371,13 @@ dc.addEventListener('click',e=>{
 
 dc.addEventListener('dblclick',e=>{
   e.preventDefault();e.stopPropagation();
-  // Wizard polygon OR line finish
   const _wTool=wizDrawContext?.drawTool;
   const _wMin=(_wTool==='line')?2:3;
   if(wizardOpen&&wizDrawContext&&(_wTool==='polygon'||_wTool==='line')&&wizardDrawing&&wizCurrentLLs.length>=_wMin){
-    wizCurrentLLs.pop(); // remove extra point added by first click of dblclick
+    wizCurrentLLs.pop();
     commitWizPolygon();
     return;
   }
-  // Edit polygon finish
   if(editDrawing&&editDrawTool==='polygon'&&editCurrentLLs.length>=2){
     const p=projects.find(x=>x.id===editProjectId);
     if(p){
@@ -1441,11 +1396,10 @@ dc.addEventListener('dblclick',e=>{
 // ── WIZARD ──────────────────────────────────────────────────────────
 function openWizard(){
   wizardOpen=true;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
-  wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];wizPedShapes=[];stagingYN=false;roadYN=false;
+  wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];stagingYN=false;roadYN=false;
   document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
   document.getElementById('wiz-phase').value='charter';
   buildPhaseSchedule();
-  // Reset shape timeline checkboxes and grids
   ['stg','road','ped'].forEach(t=>{
     const chk=document.getElementById(t+'-match-chk');
     if(chk){chk.checked=true;}
@@ -1487,21 +1441,17 @@ function buildShapePhaseGrid(prefix, matchDates){
   const grid=document.getElementById(prefix+'-phase-grid');
   if(!grid) return;
   const locked=document.getElementById(prefix+'-match-chk')?.checked;
-
-  // Preserve existing enabled/disabled state across rebuilds
   const prevEnabled={};
   phases.forEach(ph=>{
     const chk=document.getElementById(prefix+'-'+ph+'-enabled');
     if(chk) prevEnabled[ph]=chk.checked;
   });
-
   grid.innerHTML='<div class="phase-sched">'+phases.map(ph=>{
     const col=PHASES[ph].color;
     const mainStart=document.getElementById('ps-'+ph+'-start')?.value||'';
     const mainEnd=document.getElementById('ps-'+ph+'-end')?.value||'';
     const existStart=matchDates?mainStart:(document.getElementById(prefix+'-'+ph+'-start')?.value||mainStart);
     const existEnd=matchDates?mainEnd:(document.getElementById(prefix+'-'+ph+'-end')?.value||mainEnd);
-    // Default enabled = true (preserve previous state if exists)
     const isEnabled=(ph in prevEnabled)?prevEnabled[ph]:true;
     const rowOpacity=isEnabled?'1':'0.4';
     return `<div class="phase-sched-row" id="${prefix}-${ph}-row"
@@ -1554,7 +1504,6 @@ function toggleShapeTimeline(prefix){
 }
 
 function syncShapeTimelines(){
-  // Called when main phase dates change — refresh any locked shape grids
   ['stg','road','ped'].forEach(prefix=>{
     const chk=document.getElementById(prefix+'-match-chk');
     if(chk&&chk.checked) buildShapePhaseGrid(prefix, true);
@@ -1562,20 +1511,17 @@ function syncShapeTimelines(){
 }
 
 function getShapeTimeline(prefix){
-  // Returns phaseSchedule array for this shape type
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
   const entries=[];
   phases.forEach(ph=>{
     const enabledChk=document.getElementById(prefix+'-'+ph+'-enabled');
-    // If checkbox exists and is unchecked, skip this phase
     if(enabledChk&&!enabledChk.checked) return;
     const s=document.getElementById(prefix+'-'+ph+'-start')?.value;
     const e=document.getElementById(prefix+'-'+ph+'-end')?.value;
     if(s&&e) entries.push({phase:ph,start:s,end:e});
   });
-  // Overall start/end from first/last entry
   if(entries.length){
     return {
       start:entries[0].start,
@@ -1583,7 +1529,6 @@ function getShapeTimeline(prefix){
       phaseSchedule:entries
     };
   }
-  // Fallback to main project schedule
   const sched=readPhaseSchedule();
   return {
     start:sched.entries[0]?.start||'',
@@ -1605,7 +1550,6 @@ function setPedYN(val){
   document.getElementById('pedDrawTools').style.display=val?'block':'none';
   if(val) buildShapePhaseGrid('ped', true);
 }
-
 function setRoadYN(val){
   roadYN=val;
   document.getElementById('yn-road-yes').classList.toggle('active',val);
@@ -1614,9 +1558,9 @@ function setRoadYN(val){
   if(val) buildShapePhaseGrid('road', true);
 }
 
-// Slide wizard down and show banner so user can draw on map
 function startWizardDraw(section,drawTool){
   wizDrawContext={section,drawTool};
+  // FIX: Initialize drawing state before entering drawing mode
   wizardDrawing=false;
   wizCurrentLLs=[];
   document.getElementById('wizardPanel').classList.add('hidden-for-drawing');
@@ -1627,27 +1571,14 @@ function startWizardDraw(section,drawTool){
     ?'Click to place points · Double-click to finish · or click Done Drawing'
     :'Click anywhere on the map to drop a pin · click Done Drawing when finished';
   if(isLine){
-    // For line mode: also listen on mapWrap since canvas click may be blocked
-    document.getElementById('mapWrap').onclick=function(ev){
-      if(!wizardOpen||!wizDrawContext||wizDrawContext.drawTool!=='line')return;
-      const r=dc.getBoundingClientRect();
-      const x=ev.clientX-r.left, y=ev.clientY-r.top;
-      const ll=xyToLL(x,y);
-      if(!wizardDrawing){wizardDrawing=true;wizCurrentLLs=[];}
-      wizCurrentLLs.push(ll);
-      redraw();
-    };
-    document.getElementById('mapWrap').ondblclick=function(ev){
-      if(!wizardOpen||!wizDrawContext||wizDrawContext.drawTool!=='line')return;
-      if(wizCurrentLLs.length>0) wizCurrentLLs.pop();
-      if(wizCurrentLLs.length>=2) commitWizPolygon();
-      document.getElementById('mapWrap').onclick=null;
-      document.getElementById('mapWrap').ondblclick=null;
-    };
+    // Line mode: canvas intercepts clicks, same as polygon
+    // FIX: set wizardDrawing=true here so the dc.click handler doesn't reset the array
+    wizardDrawing=true;
+    document.getElementById('mapWrap').onclick=null;
+    document.getElementById('mapWrap').ondblclick=null;
   }
   document.getElementById('drawingBanner').classList.add('show');
-  if(isPoly){
-    // Polygon: canvas intercepts clicks
+  if(isPoly||isLine){
     setTimeout(()=>{
       dc.style.pointerEvents='all';
       dc.style.cursor='crosshair';
@@ -1656,19 +1587,8 @@ function startWizardDraw(section,drawTool){
     map.scrollWheelZoom.disable();
     map.off('click',onWizMapClick);
     map.off('dblclick',onWizLineDblClick);
-  } else if(isLine){
-    // Line: disable dragging so clicks register properly, use canvas for cursor
-    dc.style.pointerEvents='all';
-    dc.style.cursor='crosshair';
-    map.dragging.disable();
-    map.scrollWheelZoom.disable();
-    map.off('click',onWizMapClick);
-    map.off('dblclick',onWizLineDblClick);
-    // Wire clicks through canvas (same pipeline as polygon)
-    // onWizLineClick is wired via dc.addEventListener below
-    wizardDrawing=true;
   } else {
-    // Pin: canvas transparent, map fires clicks normally
+    // Pin mode
     dc.style.pointerEvents='none';
     dc.style.cursor='';
     map.dragging.enable();
@@ -1679,17 +1599,14 @@ function startWizardDraw(section,drawTool){
   }
 }
 
-// Line drawing now handled by canvas click (same as polygon)
 function onWizLineClick(e){}
 function onWizLineDblClick(e){}
 
 function updateLinePreview(){
-  // Line preview is drawn on canvas via redraw() — just trigger a redraw
   redraw();
 }
 
 function clearLinePreview(){
-  // Nothing to clear — canvas redraws handle it
   redraw();
 }
 
@@ -1699,7 +1616,6 @@ function restoreWizard(){
 }
 
 function finishWizardDraw(){
-  // If polygon in progress with enough points, commit it
   const isLine=wizDrawContext?.drawTool==='line';
   if(wizardDrawing&&((isLine&&wizCurrentLLs.length>=2)||(!isLine&&wizCurrentLLs.length>=3))){
     commitWizPolygon();
@@ -1739,7 +1655,6 @@ function commitWizPolygon(){
 }
 
 function onWizMapClick(e){
-  // Only handles pin drops — polygon clicks go through canvas dc.addEventListener
   if(!wizDrawContext||wizDrawContext.drawTool!=='pin')return;
   const ll=[e.latlng.lat,e.latlng.lng];
   const arr=getSectionArr(wizDrawContext.section);
@@ -1751,8 +1666,8 @@ function onWizMapClick(e){
   L.marker(ll,{icon}).addTo(markerGroup);
   redraw();
 }
-function onWizMapDblClick(e){ /* polygon dblclick handled by canvas listener */ }
-function onWizMapMove(e){ /* mousemove handled by dc mousemove listener */ }
+function onWizMapDblClick(e){}
+function onWizMapMove(e){}
 
 function updateDrawnItemsEl(arr,elId,section){
   const el=document.getElementById(elId);
@@ -1772,8 +1687,6 @@ function saveProject(){
   const manager=document.getElementById('wiz-manager').value.trim();
   const desc=document.getElementById('wiz-desc').value.trim();
   const startingPhase=document.getElementById('wiz-phase').value;
-
-  // Read phase schedule from grid
   const phaseSchedule=readPhaseSchedule();
   const errors=[];
   if(!name)    errors.push('• Project Name');
@@ -1785,7 +1698,6 @@ function saveProject(){
     alert('Please complete the following required fields:\n\n'+errors.join('\n'));
     return;
   }
-  // Overall start = first phase start, end = last phase end
   const startVal=phaseSchedule.entries[0].start;
   const endVal=phaseSchedule.entries[phaseSchedule.entries.length-1].end;
   const stagingTimeline=getShapeTimeline('stg');
@@ -1817,9 +1729,7 @@ function saveProject(){
 
 // ── EDIT EXTENTS ────────────────────────────────────────────────────
 function openEditInfo(){
-  // Open edit modal focused on project details (not extents)
   openEditExtents();
-  // Scroll to top of modal after open
   setTimeout(()=>{
     const modal=document.querySelector('.edit-modal');
     if(modal) modal.scrollTop=0;
@@ -1831,23 +1741,18 @@ function openEditExtents(){
   editProjectId=contextProjectId;
   const p=projects.find(x=>x.id===editProjectId);if(!p)return;
   document.getElementById('editPanelTitle').textContent=`Edit Project — ${p.name}`;
-  // Populate detail fields
   document.getElementById('edit-name').value    = p.name    || '';
   document.getElementById('edit-manager').value = p.manager || '';
   document.getElementById('edit-desc').value    = p.desc    || '';
   document.getElementById('edit-start').value   = p.start   || '';
   document.getElementById('edit-end').value     = p.end     || '';
-  // Set type dropdown
   const typeEl=document.getElementById('edit-type');
   for(let i=0;i<typeEl.options.length;i++){
     if(typeEl.options[i].value===p.type||typeEl.options[i].text===p.type){typeEl.selectedIndex=i;break;}
   }
-  // Set phase dropdown
   document.getElementById('edit-phase').value = p.phase || 'construction';
-  // Build phase schedule editor
   buildEditPhaseSchedule(p);
   renderEditShapes();
-  // Build timeline grids for staging/road/ped
   buildEditShapeTimeline(p, 'stg', 'edit-stg-phase-grid');
   buildEditShapeTimeline(p, 'road', 'edit-road-phase-grid');
   buildEditShapeTimeline(p, 'ped', 'edit-ped-phase-grid');
@@ -1887,7 +1792,6 @@ function deleteShape(i){
   renderEditShapes();refreshMap();showVertexHandles();
 }
 
-// Vertex editing state
 let _editShape=null, _editProject=null, _editVertexIdx=null;
 
 function editShapeVertices(shapeIndex){
@@ -1896,10 +1800,8 @@ function editShapeVertices(shapeIndex){
   const s=p.shapes[shapeIndex];
   if(!s||(s.type!=='polygon'&&s.type!=='line')||!s.latlngs)return;
   _editShape=s; _editProject=p;
-
   const col=PHASES[p.phase]?.color||'#C9A96E';
   document.getElementById('editPanel').classList.remove('show');
-  // Attach map-level contextmenu for vertex right-click delete
   map.getContainer().addEventListener('contextmenu',_onVtxContextMenu);
   document.getElementById('bannerMsg').textContent='Drag circle to move · Click circle to select then delete · Click diamond to add vertex';
   document.getElementById('drawingBanner').classList.add('show');
@@ -1919,12 +1821,10 @@ function editShapeVertices(shapeIndex){
     document.getElementById('editPanel').classList.add('show');
     showVertexHandles();
   };
-
   rebuildVertexHandles(s, p, col);
   try{map.flyToBounds(L.polygon(s.latlngs).getBounds(),{padding:[100,100],duration:.6});}catch(ex){}
 }
 
-// Vertex editing state
 let _vtxShape=null,_vtxProject=null,_vtxCol=null;
 const vtxToolbar=document.getElementById('vtxToolbar');
 const vtxOverlay=document.getElementById('vtxOverlay');
@@ -1946,17 +1846,14 @@ function vtxDeleteSelected(){
 
 function updateVtxOverlay(lls,col,s,p){
   vtxOverlay.innerHTML='';
-  // Store lat/lngs for hit-testing on contextmenu
   vtxOverlay._lls=lls;
   vtxOverlay._s=s; vtxOverlay._p=p; vtxOverlay._col=col;
 }
 
-// Single contextmenu listener on the map container — no overlay divs blocking drag
 function _onVtxContextMenu(ev){
   if(!_vtxShape)return;
   const lls=_vtxShape.latlngs;
   if(!lls||!lls.length)return;
-  // Find which vertex is under the cursor (within 14px)
   const mapRect=map.getContainer().getBoundingClientRect();
   const mx=ev.clientX-mapRect.left, my=ev.clientY-mapRect.top;
   let closest=null, closestDist=14;
@@ -1977,14 +1874,11 @@ function _onVtxContextMenu(ev){
 
 function rebuildVertexHandles(s, p, col){
   _vtxShape=s; _vtxProject=p; _vtxCol=col;
-  // Remove and re-add vertexGroup to ensure drag works after layer clear
   map.removeLayer(vertexGroup);
   vertexGroup.clearLayers();
   vertexGroup.addTo(map);
   vtxOverlay.innerHTML='';
   const lls=s.latlngs;
-
-  // ── Leaflet markers for DRAGGING ──────────────────────────────────
   lls.forEach((ll,vi)=>{
     const latLng=Array.isArray(ll)?L.latLng(ll[0],ll[1]):L.latLng(ll.lat,ll.lng);
     const icon=L.divIcon({
@@ -2006,8 +1900,6 @@ function rebuildVertexHandles(s, p, col){
       rebuildVertexHandles(s,p,col);
     });
   });
-
-  // ── Midpoint diamonds (Leaflet markers for visual + click) ────────
   lls.forEach((ll,vi)=>{
     const nextIdx=(vi+1)%lls.length;
     const ll1=Array.isArray(ll)?ll:[ll.lat,ll.lng];
@@ -2028,11 +1920,7 @@ function rebuildVertexHandles(s, p, col){
       rebuildVertexHandles(s,p,col);
     });
   });
-
-  // ── HTML overlay for right-click delete (outside Leaflet's event system) ──
   updateVtxOverlay(lls,col,s,p);
-
-  // Keep overlay in sync when map moves
   map.off('move zoom',_vtxMoveHandler);
   _vtxMoveHandler=function(){updateVtxOverlay(lls,col,s,p);};
   map.on('move zoom',_vtxMoveHandler);
@@ -2041,16 +1929,18 @@ let _vtxMoveHandler=null;
 
 function startEditAddDraw(drawTool, section){
   editDrawTool=drawTool;
-  editDrawSection=section||'extents'; // 'extents' | 'staging' | 'road'
+  editDrawSection=section||'extents';
   editDrawing=false;editCurrentLLs=[];
   document.getElementById('editPanel').classList.remove('show');
   document.getElementById('bannerMsg').textContent=drawTool==='polygon'
     ?'Click to place polygon points · Double-click to finish · or click Done Drawing'
+    :drawTool==='line'
+    ?'Click to place line points · Double-click to finish · or click Done Drawing'
     :'Click on the map to add a pin · Click Done Drawing when finished';
   document.getElementById('drawingBanner').classList.add('show');
   document.querySelector('#drawingBanner button').onclick=finishEditDraw;
   map.off('click',onEditMapClick);
-  if(drawTool==='polygon'){
+  if(drawTool==='polygon'||drawTool==='line'){
     dc.style.pointerEvents='all';
     dc.style.cursor='crosshair';
     map.dragging.disable();
@@ -2073,24 +1963,26 @@ function onEditMapClick(e){
   p.shapes.push(shape);
   refreshMap();renderEditShapes();redraw();
 }
-function onEditMapDblClick(e){ /* polygon dblclick handled by canvas listener */ }
-function onEditMapMove(e){ /* mousemove handled by dc listener */ }
+function onEditMapDblClick(e){}
+function onEditMapMove(e){}
 
 function finishEditDraw(){
   if(editDrawing&&editCurrentLLs.length>=2){
     const p=projects.find(x=>x.id===editProjectId);
     if(p){
       editCurrentLLs.pop();
-      const shape={type:'polygon',latlngs:[...editCurrentLLs]};
+      const shapeType=(editDrawTool==='line')?'line':'polygon';
+      const shape={type:shapeType,latlngs:[...editCurrentLLs]};
       if(editDrawSection==='staging') shape.isStagingArea=true;
       else if(editDrawSection==='road') shape.isRoadClosure=true;
+      else if(editDrawSection==='ped') shape.isPedAccess=true;
       p.shapes.push(shape);
     }
   }
   editDrawing=false;editCurrentLLs=[];
   dc.style.pointerEvents='none';dc.style.cursor='';
   document.getElementById('drawingBanner').classList.remove('show');
-  document.querySelector('#drawingBanner button').onclick=finishWizardDraw; // restore default
+  document.querySelector('#drawingBanner button').onclick=finishWizardDraw;
   map.off('click',onEditMapClick);
   map.dragging.enable();map.scrollWheelZoom.enable();
   refreshMap();renderEditShapes();redraw();
@@ -2102,7 +1994,6 @@ function buildEditPhaseSchedule(p){
   const container=document.getElementById('edit-phase-sched');
   if(!container)return;
   const schedule=p.phaseSchedule||[];
-  // Build rows for all phases that have schedule entries OR all from starting phase
   const startPhase=p.phase||'charter';
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
@@ -2140,14 +2031,12 @@ function readEditPhaseSchedule(p){
 function buildEditShapeTimeline(p, shapeType, gridId){
   const grid=document.getElementById(gridId);
   if(!grid) return;
-  // Get existing phaseSchedule from first shape of this type
   let existingSched=[];
   p.shapes.forEach(s=>{
     if(shapeType==='stg'&&s.isStagingArea&&s.phaseSchedule) existingSched=s.phaseSchedule;
     if(shapeType==='road'&&s.isRoadClosure&&s.phaseSchedule) existingSched=s.phaseSchedule;
     if(shapeType==='ped'&&s.isPedAccess&&s.phaseSchedule) existingSched=s.phaseSchedule;
   });
-  // Fall back to project phase schedule
   const baseSched=p.phaseSchedule||[];
   const phases=baseSched.length?baseSched.map(e=>e.phase):
     (()=>{const si=PHASE_ORDER.indexOf(p.phase);return PHASE_ORDER.slice(si>=0?si:0);})();
@@ -2219,7 +2108,6 @@ function closeEditPanel(save){
       p.type    = document.getElementById('edit-type').value;
       p.phase   = document.getElementById('edit-phase').value;
       p.desc    = document.getElementById('edit-desc').value.trim();
-      // Read phase schedule; derive overall start/end from it
       const sched=readEditPhaseSchedule(p);
       if(sched.length){
         p.phaseSchedule=sched;
@@ -2229,7 +2117,6 @@ function closeEditPanel(save){
         p.start = document.getElementById('edit-start').value;
         p.end   = document.getElementById('edit-end').value;
       }
-      // Save shape timelines back to matching shapes
       const stgSched=readEditShapeTimeline('edit-stg-phase-grid',p);
       const roadSched=readEditShapeTimeline('edit-road-phase-grid',p);
       const pedSched=readEditShapeTimeline('edit-ped-phase-grid',p);
@@ -2353,7 +2240,7 @@ function startPlayInterval(){
     else{selectMonth(0);}
   },getPlayDelay());
 }
-function advancePlay(){/* instant first step done by interval */}
+function advancePlay(){}
 document.getElementById('speedSel').addEventListener('change',()=>{if(playing){startPlayInterval();}});
 
 // ── SIDEBAR ─────────────────────────────────────────────────────────
