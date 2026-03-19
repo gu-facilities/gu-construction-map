@@ -211,12 +211,12 @@ select.psel{padding:4px 8px;font-family:'Source Sans 3',sans-serif;font-size:.68
 .tl-month.selected .mo{color:var(--navy);font-weight:700;}
 .tl-month.selected .yr{color:var(--navy);}
 /* Day-mode timeline */
-.tl-day{flex-shrink:0;width:18px;display:flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;padding:2px 0;border-radius:3px;transition:background .1s;position:relative;}
+.tl-day{flex-shrink:0;width:18px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;user-select:none;padding:1px 0 2px;border-radius:3px;transition:background .1s;height:32px;}
 .tl-day:hover{background:#f5f7fa;}
 .tl-day .dn{font-size:.46rem;color:#a0aab8;line-height:1.2;}
 .tl-day.selected .dn{color:var(--navy);font-weight:700;}
-.tl-day.month-start{border-left:1px solid #e0e4ea;}
-.tl-month-label{position:absolute;top:0;left:2px;font-size:.44rem;font-weight:700;color:#667;letter-spacing:.3px;white-space:nowrap;pointer-events:none;text-transform:uppercase;}
+.tl-day.month-start{border-left:1.5px solid #c8d0dc;}
+.tl-month-label{font-size:.44rem;font-weight:700;color:#445;letter-spacing:.3px;white-space:nowrap;text-transform:uppercase;line-height:1;margin-bottom:1px;}
 .tl-cursor{width:3px;height:32px;background:var(--gold);border-radius:2px;position:absolute;top:0;pointer-events:none;}
 /* playback controls */
 .tl-controls{display:flex;align-items:center;gap:4px;flex-shrink:0;}
@@ -2222,27 +2222,50 @@ function buildTimeline(){
 
   if(dayMode){
     // Day mode: 365 ticks, each 18px wide
+    // Two-row layout: month labels on top, day numbers on bottom
     tlDayCount=365;
     tlSelectedDay=0;
     const track=document.getElementById('tlTrack');
     track.innerHTML='';
-    const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';track.appendChild(cursor);
-    let lastMonth=-1;
+    track.style.height='44px'; // two rows: ~12px month + ~32px day
+
+    const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';
+    cursor.style.height='44px';
+    track.appendChild(cursor);
+
+    // Build month label spans absolutely positioned above day ticks
+    const monthRow=document.createElement('div');
+    monthRow.style.cssText='position:absolute;top:0;left:0;height:13px;pointer-events:none;white-space:nowrap;';
+    let lastMo=-1;
     for(let i=0;i<tlDayCount;i++){
       const d=new Date(tlStart);d.setDate(d.getDate()+i);
-      const el=document.createElement('div');
+      if(d.getMonth()!==lastMo){
+        lastMo=d.getMonth();
+        const lbl=document.createElement('span');
+        lbl.style.cssText=`position:absolute;left:${i*18}px;font-size:.44rem;font-weight:700;color:#445;letter-spacing:.3px;text-transform:uppercase;line-height:13px;`;
+        lbl.textContent=MONTHS[d.getMonth()]+' '+d.getFullYear();
+        monthRow.appendChild(lbl);
+      }
+    }
+    track.appendChild(monthRow);
+
+    // Day tick elements, positioned in a flex row offset by 13px from top
+    const dayRow=document.createElement('div');
+    dayRow.style.cssText='position:absolute;top:13px;left:0;display:flex;align-items:stretch;height:31px;';
+    for(let i=0;i<tlDayCount;i++){
+      const d=new Date(tlStart);d.setDate(d.getDate()+i);
       const isMonthStart=(d.getDate()===1);
+      const el=document.createElement('div');
       el.className='tl-day'+(i===0?' selected':'')+(isMonthStart?' month-start':'');
       el.dataset.idx=i;
-      // Show day number; on month-start also show month label above
-      let inner=`<span class="dn">${d.getDate()}</span>`;
-      if(isMonthStart){
-        inner=`<span class="tl-month-label">${MONTHS[d.getMonth()]} ${d.getFullYear()}</span><span class="dn" style="margin-top:10px">${d.getDate()}</span>`;
-      }
-      el.innerHTML=inner;
+      el.innerHTML=`<span class="dn">${d.getDate()}</span>`;
       el.onclick=(()=>{const idx=i;return()=>selectDay(idx);})();
-      track.appendChild(el);
+      dayRow.appendChild(el);
     }
+    track.appendChild(dayRow);
+
+    // Set track min-width so scroll works
+    track.style.minWidth=(tlDayCount*18+20)+'px';
     positionCursor();
   } else {
     // Month mode: 3 or 5 year spans
@@ -2251,6 +2274,8 @@ function buildTimeline(){
     if(tlSelectedMonth>=tlMonths)tlSelectedMonth=0;
     const track=document.getElementById('tlTrack');
     track.innerHTML='';
+    track.style.height='';
+    track.style.minWidth='';
     const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';track.appendChild(cursor);
     for(let i=0;i<tlMonths;i++){
       const d=new Date(tlStart);d.setMonth(d.getMonth()+i);
@@ -2287,6 +2312,8 @@ function positionCursor(){
   if(!c)return;
   if(dayMode){
     c.style.left=(tlSelectedDay*18+8)+'px';
+    c.style.top='13px';
+    c.style.height='31px';
     document.querySelectorAll('.tl-day').forEach(el=>{
       const idx=parseInt(el.dataset.idx);
       const inWin=(idx===tlSelectedDay);
@@ -2296,6 +2323,8 @@ function positionCursor(){
     });
   } else {
     c.style.left=(tlSelectedMonth*46+22)+'px';
+    c.style.top='';
+    c.style.height='';
     document.querySelectorAll('.tl-month').forEach(el=>{
       const idx=parseInt(el.dataset.idx);
       const inWin=idx>=tlSelectedMonth&&idx<tlSelectedMonth+tlWindowMonths;
@@ -2386,6 +2415,8 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
 buildTimeline();
 buildPhaseSchedule();
+// Ensure Leaflet recalculates its container size after full page layout
+setTimeout(()=>map.invalidateSize(),100);
 (async()=>{
   showHint('Loading projects…',0);
   const loaded=await apiGet();
