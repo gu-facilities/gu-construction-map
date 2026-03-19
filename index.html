@@ -32,6 +32,19 @@ header h1{font-family:'EB Garamond',serif;font-size:1.05rem;font-weight:500;colo
 .scontent::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
 .new-project-btn{display:flex;align-items:center;gap:7px;width:100%;padding:8px 12px;margin-bottom:10px;background:var(--navy);color:var(--gold);border:none;border-radius:6px;cursor:pointer;font-family:'Source Sans 3',sans-serif;font-size:.75rem;font-weight:700;letter-spacing:.3px;transition:background .15s;}
 .new-project-btn:hover{background:#0a2d5a;}
+/* Group-by sub-tabs */
+.group-tabs{display:flex;gap:0;border-bottom:1px solid #e4e8ee;margin-bottom:8px;}
+.group-tab{flex:1;padding:5px 4px;font-family:'Source Sans 3',sans-serif;font-size:.62rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;color:#8a96a8;transition:all .15s;}
+.group-tab.active{color:var(--navy);border-bottom-color:var(--gold);}
+/* Collapsible group header */
+.pgroup-header{display:flex;align-items:center;gap:7px;padding:5px 8px;margin-bottom:4px;border-radius:5px;cursor:pointer;background:#f4f6f9;border:1px solid #e8eaee;user-select:none;transition:background .12s;}
+.pgroup-header:hover{background:#edf0f5;}
+.pgroup-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.pgroup-label{font-size:.65rem;font-weight:700;color:var(--navy);flex:1;}
+.pgroup-count{font-size:.6rem;color:#8a9ab0;font-weight:600;}
+.pgroup-arrow{font-size:.6rem;color:#a0aab8;transition:transform .18s;}
+.pgroup-arrow.open{transform:rotate(90deg);}
+.pgroup-body{overflow:hidden;transition:max-height .2s ease;}
 .pcard{border:1px solid #e8eaee;border-radius:6px;padding:9px 10px;margin-bottom:7px;cursor:pointer;transition:box-shadow .15s,transform .1s;border-left:3px solid transparent;position:relative;user-select:none;}
 .pcard:hover{box-shadow:0 2px 10px rgba(0,0,0,.08);transform:translateX(1px);}
 .badge{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:10px;color:#fff;margin-bottom:4px;}
@@ -259,6 +272,10 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
     <div class="sidebar-tabs">
       <button class="active" onclick="switchTab('projects',this)">Projects</button>
     </div>
+    <div class="group-tabs" id="groupTabs" style="padding:0 8px;">
+      <button class="group-tab active" id="gt-stage" onclick="setGroupBy('stage',this)">By Stage</button>
+      <button class="group-tab" id="gt-type" onclick="setGroupBy('type',this)">By Type</button>
+    </div>
     <div class="scontent" id="tabContent"></div>
   </div>
   <!-- MAP AREA -->
@@ -323,6 +340,15 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
             <option value="1" selected>1 Yr</option>
             <option value="3">3 Yrs</option>
             <option value="5">5 Yrs</option>
+          </select>
+          <select class="yr-sel" id="yrPicker" onchange="onYrPickerChange()" style="display:none;">
+            <option value="2025">2025</option>
+            <option value="2026" selected>2026</option>
+            <option value="2027">2027</option>
+            <option value="2028">2028</option>
+            <option value="2029">2029</option>
+            <option value="2030">2030</option>
+            <option value="2031">2031</option>
           </select>
           <label style="display:flex;align-items:center;gap:5px;font-size:.65rem;font-weight:600;color:#667;cursor:pointer;white-space:nowrap;user-select:none;margin-left:2px;">
             <input type="checkbox" id="showAllChk" onchange="toggleShowAll(this.checked)"
@@ -667,6 +693,8 @@ let tlSelectedDay=0; // index into day array when dayMode=true
 let tlDayCount=365;  // total days in day-mode track
 let showAllProjects=false;
 let activeTab='projects',contextProjectId=null;
+let groupBy='stage'; // 'stage' | 'type'
+let collapsedGroups=new Set(); // set of group keys that are collapsed
 let mouseCanvasPos=null;
 
 // Wizard state
@@ -2221,23 +2249,26 @@ function getTlWindow(){
 function buildTimeline(){
   const val=document.getElementById('yrRange').value;
   dayMode=(val==='1');
-  const __n=new Date();
-  tlStart=new Date(__n.getFullYear(),__n.getMonth(),1);
+  const yrPicker=document.getElementById('yrPicker');
 
   if(dayMode){
+    // Show year picker; use selected year for tlStart
+    yrPicker.style.display='';
+    const yr=parseInt(yrPicker.value)||new Date().getFullYear();
+    tlStart=new Date(yr,0,1); // Jan 1 of selected year
     // Day mode: 365 ticks, each 18px wide
     // Two-row layout: month labels on top, day numbers on bottom
     tlDayCount=365;
     tlSelectedDay=0;
     const track=document.getElementById('tlTrack');
     track.innerHTML='';
-    track.style.height='44px'; // two rows: ~12px month + ~32px day
+    track.style.height='44px';
 
     const cursor=document.createElement('div');cursor.className='tl-cursor';cursor.id='tlCursor';
     cursor.style.height='44px';
     track.appendChild(cursor);
 
-    // Build month label spans absolutely positioned above day ticks
+    // Month label row
     const monthRow=document.createElement('div');
     monthRow.style.cssText='position:absolute;top:0;left:0;height:13px;pointer-events:none;white-space:nowrap;';
     let lastMo=-1;
@@ -2253,7 +2284,7 @@ function buildTimeline(){
     }
     track.appendChild(monthRow);
 
-    // Day tick elements, positioned in a flex row offset by 13px from top
+    // Day tick row
     const dayRow=document.createElement('div');
     dayRow.style.cssText='position:absolute;top:13px;left:0;display:flex;align-items:stretch;height:31px;';
     for(let i=0;i<tlDayCount;i++){
@@ -2267,11 +2298,13 @@ function buildTimeline(){
       dayRow.appendChild(el);
     }
     track.appendChild(dayRow);
-
-    // Set track min-width so scroll works
     track.style.minWidth=(tlDayCount*18+20)+'px';
     positionCursor();
   } else {
+    // Hide year picker in month modes
+    yrPicker.style.display='none';
+    const __n=new Date();
+    tlStart=new Date(__n.getFullYear(),__n.getMonth(),1);
     // Month mode: 3 or 5 year spans
     const years=parseInt(val);
     tlMonths=years*12;
@@ -2290,6 +2323,11 @@ function buildTimeline(){
     }
     positionCursor();
   }
+}
+
+function onYrPickerChange(){
+  buildTimeline(); // rebuilds with new year, resets to day 0
+  refreshMap();renderSidebar();updateStats();
 }
 
 function selectDay(idx){
@@ -2352,8 +2390,23 @@ function startPlayInterval(){
   clearInterval(playInterval);
   playInterval=setInterval(()=>{
     if(dayMode){
-      if(tlSelectedDay<tlDayCount-1){selectDay(tlSelectedDay+1);}
-      else{selectDay(0);}
+      if(tlSelectedDay<tlDayCount-1){
+        selectDay(tlSelectedDay+1);
+      } else {
+        // Advance to next year
+        const yrPicker=document.getElementById('yrPicker');
+        const curYr=parseInt(yrPicker.value)||2026;
+        const maxYr=parseInt(yrPicker.options[yrPicker.options.length-1].value);
+        if(curYr<maxYr){
+          yrPicker.value=curYr+1;
+          buildTimeline();
+          refreshMap();renderSidebar();updateStats();
+          selectDay(0);
+        } else {
+          // At the last year — stop playback
+          togglePlay();
+        }
+      }
     } else {
       if(tlSelectedMonth<tlMonths-1){selectMonth(tlSelectedMonth+1);}
       else{selectMonth(0);}
@@ -2364,39 +2417,139 @@ function advancePlay(){}
 document.getElementById('speedSel').addEventListener('change',()=>{if(playing){startPlayInterval();}});
 
 // ── SIDEBAR ─────────────────────────────────────────────────────────
-function switchTab(tab,btn){activeTab=tab;document.querySelectorAll('.sidebar-tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderSidebar();}
-function renderSidebar(){const el=document.getElementById('tabContent');if(activeTab==='projects')el.innerHTML=buildProjectsHTML();else el.innerHTML=buildLegendHTML();}
+function switchTab(tab,btn){
+  activeTab=tab;
+  document.querySelectorAll('.sidebar-tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const groupTabs=document.getElementById('groupTabs');
+  if(groupTabs) groupTabs.style.display=(tab==='projects')?'':'none';
+  renderSidebar();
+}
+
+function setGroupBy(mode, btn){
+  groupBy=mode;
+  collapsedGroups.clear();
+  document.querySelectorAll('.group-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSidebar();
+}
+
+function toggleGroup(key){
+  if(collapsedGroups.has(key)) collapsedGroups.delete(key);
+  else collapsedGroups.add(key);
+  // Toggle the body visibility without full re-render (avoids scroll jump)
+  const body=document.getElementById('grpbody-'+key);
+  const arrow=document.getElementById('grparrow-'+key);
+  if(body){
+    const collapsed=collapsedGroups.has(key);
+    body.style.maxHeight=collapsed?'0':body.scrollHeight+'px';
+    body.style.overflow='hidden';
+    if(arrow) arrow.classList.toggle('open',!collapsed);
+  }
+}
+
+function renderSidebar(){
+  const el=document.getElementById('tabContent');
+  if(activeTab==='projects') el.innerHTML=buildProjectsHTML();
+  else el.innerHTML=buildLegendHTML();
+}
+
+function buildProjectCard(p, _ws, _we){
+  const midMonth=new Date(_ws.getTime()+((_we-_ws)/2));
+  const activePhase=getActivePhase(p, midMonth);
+  const ps=new Date(p.start),pe=new Date(p.end);
+  const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
+  const col=(PHASES[activePhase]||PHASES[p.phase]).color;
+  const opts=Object.entries(PHASES).filter(([k])=>k!=='staging'&&k!=='road').map(([k,v])=>`<option value="${k}"${k===p.phase?' selected':''}>${v.label}</option>`).join('');
+  return `<div class="pcard" style="border-left-color:${col}" onclick="focusProject('${p.id}')" oncontextmenu="showContextMenu(event,'${p.id}')">
+    <span class="badge" style="background:${col}">${(PHASES[activePhase]||PHASES[p.phase]).label}</span>
+    <div class="pname">${p.name}</div>
+    <div class="pmeta">${p.type} · ${p.start.slice(0,7)} – ${p.end.slice(0,7)}</div>
+    ${p.manager?`<div class="pmeta" style="color:#6a8aaa">👤 ${p.manager}</div>`:''}
+    <div class="pbar"><div class="pbar-fill" style="width:${pct}%;background:${col}"></div></div>
+    <div class="pct">${pct}% elapsed</div>
+    <div class="phase-change-row"><label>Change phase:</label>
+      <select class="phase-change-select" onchange="changePhase('${p.id}',this.value)" onclick="event.stopPropagation()">${opts}</select></div>
+  </div>`;
+}
+
 function buildProjectsHTML(){
   const {ws:_ws,we:_we}=getTlWindow();
-  const phaseOrder={charter:0,design:1,pre:2,construction:3,closeout:4};
-  const sorted=[...projects].sort((a,b)=>{
-    const po=(phaseOrder[a.phase]??99)-(phaseOrder[b.phase]??99);
-    if(po!==0) return po;
-    return (a.name||'').localeCompare(b.name||'');
+
+  // Filter projects to visible ones in window
+  const visible=projects.filter(p=>{
+    if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type)) return false;
+    const ps=new Date(p.start),pe=new Date(p.end);
+    if(!showAllProjects&&(ps>_we||pe<_ws)) return false;
+    return true;
   });
+
   let html=`<button class="new-project-btn" onclick="openWizard()"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="#C9A96E"/><line x1="7" y1="3.5" x2="7" y2="10.5" stroke="#C9A96E" stroke-width="1.5"/><line x1="3.5" y1="7" x2="10.5" y2="7" stroke="#C9A96E" stroke-width="1.5"/></svg> New Project</button>`;
-  let count=0;
-  sorted.forEach(p=>{
-    if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
-    const ps=new Date(p.start),pe=new Date(p.end);if(!showAllProjects&&(ps>_we||pe<_ws))return;
-    count++;
-    const midMonth=new Date(_ws.getTime()+((_we-_ws)/2));
-    const activePhase=getActivePhase(p, midMonth);
-    const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
-    const col=(PHASES[activePhase]||PHASES[p.phase]).color;
-    const opts=Object.entries(PHASES).filter(([k])=>k!=='staging'&&k!=='road').map(([k,v])=>`<option value="${k}"${k===p.phase?' selected':''}>${v.label}</option>`).join('');
-    html+=`<div class="pcard" style="border-left-color:${col}" onclick="focusProject('${p.id}')" oncontextmenu="showContextMenu(event,'${p.id}')">
-      <span class="badge" style="background:${col}">${(PHASES[activePhase]||PHASES[p.phase]).label}</span>
-      <div class="pname">${p.name}</div>
-      <div class="pmeta">${p.type} · ${p.start.slice(0,7)} – ${p.end.slice(0,7)}</div>
-      ${p.manager?`<div class="pmeta" style="color:#6a8aaa">👤 ${p.manager}</div>`:''}
-      <div class="pbar"><div class="pbar-fill" style="width:${pct}%;background:${col}"></div></div>
-      <div class="pct">${pct}% elapsed</div>
-      <div class="phase-change-row"><label>Change phase:</label>
-        <select class="phase-change-select" onchange="changePhase('${p.id}',this.value)" onclick="event.stopPropagation()">${opts}</select></div>
-    </div>`;
-  });
-  if(!count)html+='<div class="empty">No active projects in this window.</div>';
+
+  if(!visible.length){
+    return html+'<div class="empty">No active projects in this window.</div>';
+  }
+
+  if(groupBy==='stage'){
+    const phaseOrder=['charter','design','pre','construction','closeout'];
+    phaseOrder.forEach(ph=>{
+      const grpProjects=visible.filter(p=>p.phase===ph);
+      if(!grpProjects.length) return;
+      grpProjects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+      const col=PHASES[ph].color;
+      const label=PHASES[ph].label;
+      const key='stage-'+ph;
+      const isOpen=!collapsedGroups.has(key);
+      html+=`<div class="pgroup-header" onclick="toggleGroup('${key}')">
+        <div class="pgroup-dot" style="background:${col}"></div>
+        <span class="pgroup-label">${label}</span>
+        <span class="pgroup-count">${grpProjects.length}</span>
+        <span class="pgroup-arrow${isOpen?' open':''}" id="grparrow-${key}">▶</span>
+      </div>
+      <div class="pgroup-body" id="grpbody-${key}" style="max-height:${isOpen?'9999px':'0'};overflow:hidden;">
+        ${grpProjects.map(p=>buildProjectCard(p,_ws,_we)).join('')}
+      </div>`;
+    });
+  } else {
+    // Group by type
+    const typeOrder=[
+      'New Construction (Building, Structure, etc.)',
+      'Renovation','Infrastructure','Maintenance & Repair',
+      'Landscape','ENGIE Project','Redgate Project'
+    ];
+    const typeLabels={
+      'New Construction (Building, Structure, etc.)':'New Construction',
+      'Renovation':'Renovation','Infrastructure':'Infrastructure',
+      'Maintenance & Repair':'Maintenance & Repair',
+      'Landscape':'Landscape','ENGIE Project':'ENGIE Project',
+      'Redgate Project':'Redgate Project'
+    };
+    const typeColors={
+      'New Construction (Building, Structure, etc.)':'#4A7FC1',
+      'Renovation':'#7B5EA7','Infrastructure':'#3A9E7A',
+      'Maintenance & Repair':'#B85C38','Landscape':'#5F8F3A',
+      'ENGIE Project':'#C4842A','Redgate Project':'#8A3A3A'
+    };
+    typeOrder.forEach(type=>{
+      const grpProjects=visible.filter(p=>p.type===type);
+      if(!grpProjects.length) return;
+      grpProjects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+      const col=typeColors[type]||'#667';
+      const label=typeLabels[type]||type;
+      const key='type-'+type.replace(/[^a-z0-9]/gi,'_');
+      const isOpen=!collapsedGroups.has(key);
+      html+=`<div class="pgroup-header" onclick="toggleGroup('${key}')">
+        <div class="pgroup-dot" style="background:${col}"></div>
+        <span class="pgroup-label">${label}</span>
+        <span class="pgroup-count">${grpProjects.length}</span>
+        <span class="pgroup-arrow${isOpen?' open':''}" id="grparrow-${key}">▶</span>
+      </div>
+      <div class="pgroup-body" id="grpbody-${key}" style="max-height:${isOpen?'9999px':'0'};overflow:hidden;">
+        ${grpProjects.map(p=>buildProjectCard(p,_ws,_we)).join('')}
+      </div>`;
+    });
+  }
+
   return html;
 }
 function buildLegendHTML(){return '<div style="padding:4px 2px 10px;font-size:.62rem;font-weight:700;letter-spacing:.7px;color:#8a9ab0;text-transform:uppercase">Phase Colors</div>'+Object.entries(PHASES).map(([k,v])=>`<div class="leg-row"><div class="leg-sw" style="background:${v.color}"></div><span>${v.label}</span></div>`).join('');}
@@ -2417,6 +2570,14 @@ function showHint(msg,dur=3500){const t=document.getElementById('hintToast');t.t
 
 // ── INIT ────────────────────────────────────────────────────────────
 document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+// Set year picker to current year
+(function(){
+  const yrPicker=document.getElementById('yrPicker');
+  const curYr=new Date().getFullYear();
+  for(let i=0;i<yrPicker.options.length;i++){
+    if(parseInt(yrPicker.options[i].value)===curYr){yrPicker.selectedIndex=i;break;}
+  }
+})();
 buildTimeline();
 buildPhaseSchedule();
 // Ensure Leaflet recalculates its container size after full page layout
