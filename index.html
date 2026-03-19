@@ -1105,7 +1105,7 @@ function refreshMap(){
         const shapeLabel=isStaging?'Staging Area':isRoad?'Road Closure':'Project Extents';
         const polyOpts={color:col,weight:2.5,
           fillColor:col,
-          fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0,
+          fillOpacity: (!isStaging&&!isRoad) ? 0.18 : 0.01,  // >0 needed for Leaflet click detection
           dashArray:isRoad?'8,6':isStaging?'4,4':null
         };
         const poly=L.polygon(s.latlngs,{...polyOpts,pane:'polygonPane'}).addTo(polygonGroup);
@@ -1294,10 +1294,25 @@ document.addEventListener('mouseup',e=>{
   mmMapPanning=false; mapDiv.style.cursor='';
 });
 mapDiv.addEventListener('mousemove',e=>{
+  // Track mouse position for canvas preview even when map intercepts events
+  if(wizardOpen&&wizDrawContext){
+    const r=dc.getBoundingClientRect();
+    mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
+    redraw();
+  }
   if(!mmMapPanning)return;
   const dx=e.clientX-mmMapLast.x, dy=e.clientY-mmMapLast.y;
   mmMapLast={x:e.clientX,y:e.clientY};
   map.panBy([-dx,-dy],{animate:false});
+});
+
+// Also capture mousemove on Leaflet's own container for preview
+map.getContainer().addEventListener('mousemove',e=>{
+  if(wizardOpen&&wizDrawContext&&wizCurrentLLs.length){
+    const r=dc.getBoundingClientRect();
+    mouseCanvasPos=[e.clientX-r.left,e.clientY-r.top];
+    redraw();
+  }
 });
 
 // ── TOOL (main map) ─────────────────────────────────────────────────
