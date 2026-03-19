@@ -1349,9 +1349,11 @@ dc.addEventListener('click',e=>{
 
 dc.addEventListener('dblclick',e=>{
   e.preventDefault();e.stopPropagation();
-  // Wizard polygon finish
-  if(wizardOpen&&wizDrawContext&&wizDrawContext.drawTool==='polygon'&&wizardDrawing&&wizCurrentLLs.length>=2){
-    wizCurrentLLs.pop(); // remove extra point from dblclick second click
+  // Wizard polygon OR line finish
+  const _wTool=wizDrawContext?.drawTool;
+  const _wMin=(_wTool==='line')?2:3;
+  if(wizardOpen&&wizDrawContext&&(_wTool==='polygon'||_wTool==='line')&&wizardDrawing&&wizCurrentLLs.length>=_wMin){
+    wizCurrentLLs.pop(); // remove extra point added by first click of dblclick
     commitWizPolygon();
     return;
   }
