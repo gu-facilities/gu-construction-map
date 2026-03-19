@@ -1074,7 +1074,6 @@ function refreshMap(){
     p.shapes.forEach(s=>{
       // ── Pedestrian Access line ──────────────────────────────────────
       if(s.type==='line'&&s.latlngs&&s.latlngs.length>=2){
-        console.log('Rendering line:', s.latlngs.length, 'points, isPedAccess:', s.isPedAccess);
         // Check phase schedule visibility
         if(s.phaseSchedule&&s.phaseSchedule.length){
           const inWindow=s.phaseSchedule.some(entry=>
@@ -1234,7 +1233,11 @@ function drawPolygonOnCanvas(latlngs, col, closed, fillType){
 
 function redraw(){
   ctx.clearRect(0,0,dc.width,dc.height);
-  const col=PHASES[currentPhase].color;
+  // Use wizard phase color when drawing, otherwise current phase
+  const wizPhaseEl=document.getElementById('wiz-phase');
+  const col=wizardDrawing&&wizPhaseEl?
+    (PHASES[wizPhaseEl.value]||PHASES[currentPhase]).color:
+    PHASES[currentPhase].color;
 
   // Hatch fills removed — Leaflet handles all polygon fills directly
 
@@ -1707,7 +1710,6 @@ function saveProject(){
   const stagingTimeline=getShapeTimeline('stg');
   const roadTimeline=getShapeTimeline('road');
   const pedTimeline=getShapeTimeline('ped');
-  console.log('wizPedShapes before save:', JSON.stringify(wizPedShapes));
   const allShapes=[
     ...wizExtentShapes,
     ...wizStagingShapes.map(s=>({...s,isStagingArea:true,
@@ -1720,7 +1722,6 @@ function saveProject(){
       start:pedTimeline.start,end:pedTimeline.end,
       phaseSchedule:pedTimeline.phaseSchedule||[]}))
   ];
-  console.log('allShapes after build:', JSON.stringify(allShapes.map(s=>({type:s.type,isPedAccess:s.isPedAccess,latlngs:s.latlngs?.length}))));
   const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
     phase:startingPhase,start:startVal,end:endVal,desc:desc,
     phaseSchedule:phaseSchedule.entries,shapes:allShapes};
@@ -1782,7 +1783,7 @@ function renderEditShapes(){
     return arr.map(({s,i})=>`<div class="shape-row">
       <span class="shape-lbl">${s.type==='pin'?'📍 Pin':'⬡ Area'} ${i+1}</span>
       <div style="display:flex;gap:5px;">
-        ${s.type==='polygon'?`<button class="btn-del-shape" style="background:#e8f0ff;color:var(--navy);" onclick="editShapeVertices(${i})">✏️ Edit</button>`:''}
+        ${(s.type==='polygon'||s.type==='line')?`<button class="btn-del-shape" style="background:#e8f0ff;color:var(--navy);" onclick="editShapeVertices(${i})">✏️ Edit</button>`:''}
         <button class="btn-del-shape" onclick="deleteShape(${i})">🗑 Delete</button>
       </div>
     </div>`).join('');
