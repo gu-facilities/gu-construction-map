@@ -1417,7 +1417,7 @@ function redraw(){
 
   // ── Committed wizard shapes ──────────────────────────────────────
   if(wizardOpen){
-    const wizCol=PHASES[document.getElementById('wiz-phase')?.value||'construction'].color;
+    const wizCol=PHASES[document.getElementById('wiz-phase')?.value||'programming'].color;
     wizExtentShapes.forEach(s=>{
       if(s.type==='polygon') drawPolygonOnCanvas(s.latlngs, wizCol, true, 'solid');
     });
@@ -1449,7 +1449,7 @@ function redraw(){
 
   // ── In-progress edit polygon ─────────────────────────────────────
   if(editDrawing&&editCurrentLLs.length){
-    const ecol=editProjectId?PHASES[projects.find(x=>x.id===editProjectId)?.phase||'construction'].color:col;
+    const ecol=editProjectId?PHASES[projects.find(x=>x.id===editProjectId)?.phase||'programming'].color:col;
     const pts=editCurrentLLs.map(ll=>llToXY(ll[0],ll[1]));
     ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
     pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
@@ -2195,7 +2195,7 @@ function buildEditPhaseSchedule(p){
   const container=document.getElementById('edit-phase-sched');
   if(!container)return;
   const schedule=p.phaseSchedule||[];
-  const startPhase=p.phase||'charter';
+  const startPhase=p.phase||'programming';
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
   container.innerHTML='<div class="phase-sched">'+phases.map(ph=>{
@@ -2217,7 +2217,7 @@ function buildEditPhaseSchedule(p){
 }
 
 function readEditPhaseSchedule(p){
-  const startPhase=p.phase||'charter';
+  const startPhase=p.phase||'programming';
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
   const entries=[];
@@ -2653,7 +2653,7 @@ function buildProjectsHTML(){
   }
 
   if(groupBy==='stage'){
-    const phaseOrder=['charter','design','pre','construction','closeout'];
+    const phaseOrder=['programming','design_proc','design','construction_proc','construction','closeout','on_hold'];
     phaseOrder.forEach(ph=>{
       const grpProjects=visible.filter(p=>p.phase===ph);
       if(!grpProjects.length) return;
@@ -2718,7 +2718,7 @@ function updateStats(){
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
     if((p.campus||'hilltop')!==currentCampus)return;
     if(!showAllProjects&&(new Date(p.start)>_we||new Date(p.end)<_ws))return;
-    a++;if(p.phase==='construction')c++;else if(p.phase==='pre')pr++;else if(p.phase==='charter'||p.phase==='design')pl++;
+    a++;if(p.phase==='construction')c++;else if(p.phase==='construction_proc')pr++;else if(['programming','design_proc','design'].includes(p.phase))pl++;
   });
   document.getElementById('s-active').textContent=a;document.getElementById('s-constr').textContent=c;document.getElementById('s-pre').textContent=pr;document.getElementById('s-plan').textContent=pl;
 }
