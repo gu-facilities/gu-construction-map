@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 .leaflet-popup-content-wrapper { user-select: none; }
 </style>
@@ -434,7 +435,26 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 <!-- CONTEXT MENU -->
 <div class="ctx-menu" id="ctxMenu">
   <button onclick="openEditExtents()">✏️ Edit</button>
+  <button onclick="exportGanttChart()">📊 Export Gantt Chart</button>
   <button class="danger" onclick="confirmRemoveProject()">🗑 Remove</button>
+</div>
+
+<!-- GANTT EXPORT MODAL -->
+<div class="modal-overlay" id="ganttOverlay">
+  <div class="modal-box" style="max-width:520px;width:95%;">
+    <h3>Export Gantt Chart</h3>
+    <p id="ganttModalDesc" style="font-size:.78rem;color:#556;margin-bottom:14px;"></p>
+    <div style="background:#f8f9fb;border:1px solid #e4e8ee;border-radius:8px;overflow:auto;margin-bottom:16px;max-height:260px;">
+      <canvas id="ganttPreviewCanvas" style="display:block;max-width:100%;height:auto;"></canvas>
+    </div>
+    <div class="modal-btns" style="justify-content:space-between;align-items:center;">
+      <button class="btn-no" onclick="closeGanttModal()">Close</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-save" style="background:#2a6099;color:#fff;padding:7px 18px;border-radius:5px;font-family:'Source Sans 3',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;border:none;" onclick="downloadGanttPNG()">⬇ PNG</button>
+        <button class="btn-save" style="background:var(--navy);color:var(--gold);padding:7px 18px;border-radius:5px;font-family:'Source Sans 3',sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;border:none;" onclick="downloadGanttPDF()">⬇ PDF</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- CONFIRM REMOVE -->
@@ -2729,6 +2749,243 @@ setTimeout(()=>map.invalidateSize(),100);
   } else showHint('Drag to pan · Scroll to zoom · Click a dot to inspect',3500);
   refreshMap();renderSidebar();buildMiniLegend();updateStats();
 })();
+
+// ── GANTT CHART EXPORT ────────────────────────────────────────────────
+
+let _ganttCanvas = null; // holds the rendered canvas for download
+
+function exportGanttChart(){
+  ctxMenu.style.display='none';
+  const p = projects.find(x=>String(x.id)===String(contextProjectId));
+  if(!p){ showHint('Project not found',2000); return; }
+  if(!p.phaseSchedule||!p.phaseSchedule.length){
+    showHint('No phase schedule — add dates first via Edit',3000); return;
+  }
+  _ganttCanvas = drawGantt(p);
+  document.getElementById('ganttModalDesc').textContent = p.name;
+  // Show preview (scaled down)
+  const preview = document.getElementById('ganttPreviewCanvas');
+  const scale = Math.min(1, 480 / _ganttCanvas.width);
+  preview.width  = Math.round(_ganttCanvas.width  * scale);
+  preview.height = Math.round(_ganttCanvas.height * scale);
+  const pctx = preview.getContext('2d');
+  pctx.drawImage(_ganttCanvas, 0, 0, preview.width, preview.height);
+  document.getElementById('ganttOverlay').classList.add('show');
+}
+
+function closeGanttModal(){
+  document.getElementById('ganttOverlay').classList.remove('show');
+  _ganttCanvas = null;
+}
+
+function downloadGanttPNG(){
+  if(!_ganttCanvas) return;
+  const p = projects.find(x=>String(x.id)===String(contextProjectId));
+  const fname = (p?p.name:'gantt').replace(/[^a-z0-9]/gi,'_')+'_gantt.png';
+  const link = document.createElement('a');
+  link.download = fname;
+  link.href = _ganttCanvas.toDataURL('image/png');
+  link.click();
+}
+
+function downloadGanttPDF(){
+  if(!_ganttCanvas) return;
+  const p = projects.find(x=>String(x.id)===String(contextProjectId));
+  const fname = (p?p.name:'gantt').replace(/[^a-z0-9]/gi,'_')+'_gantt.pdf';
+  const imgData = _ganttCanvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  // Landscape PDF sized to canvas aspect ratio
+  const W = _ganttCanvas.width;
+  const H = _ganttCanvas.height;
+  const pdfW = 297; // A4 landscape mm width
+  const pdfH = Math.round(H / W * pdfW);
+  const pdf = new jsPDF({ orientation:'landscape', unit:'mm', format:[pdfW, Math.max(pdfH,80)] });
+  pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+  pdf.save(fname);
+}
+
+function drawGantt(p){
+  const schedule = p.phaseSchedule;
+  if(!schedule||!schedule.length) return null;
+
+  // ── Layout constants ─────────────────────────────────────────────
+  const DPR       = 2;          // hi-dpi
+  const FONT      = 'Source Sans 3, Arial, sans-serif';
+  const LEFT_PAD  = 16;         // left margin
+  const RIGHT_PAD = 16;
+  const TOP_PAD   = 56;         // space for title + timeline header
+  const HEADER_H  = 32;         // timeline header row height
+  const ROW_H     = 44;         // height per phase row
+  const ROW_GAP   = 8;
+  const BOTTOM_PAD= 32;
+  const MIN_BAR_W = 4;
+  const RADIUS    = 5;
+
+  // ── Date range ───────────────────────────────────────────────────
+  let minDate = new Date(schedule[0].start);
+  let maxDate = new Date(schedule[schedule.length-1].end);
+  // Pad slightly
+  minDate = new Date(minDate); minDate.setDate(1);
+  maxDate = new Date(maxDate); maxDate.setDate(1); maxDate.setMonth(maxDate.getMonth()+1);
+
+  const totalDays = (maxDate - minDate) / 86400000;
+
+  // ── Canvas width: enough for ~14px per day, min 900, max 2400 ────
+  const DAY_W = Math.min(Math.max(Math.round(900/totalDays), 6), 18);
+  const CHART_W = Math.max(900, totalDays * DAY_W);
+  const CANVAS_W = LEFT_PAD + CHART_W + RIGHT_PAD;
+  const CANVAS_H = TOP_PAD + HEADER_H + schedule.length*(ROW_H+ROW_GAP) + BOTTOM_PAD;
+
+  const c = document.createElement('canvas');
+  c.width  = CANVAS_W * DPR;
+  c.height = CANVAS_H * DPR;
+  c.style.width  = CANVAS_W+'px';
+  c.style.height = CANVAS_H+'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  // ── Background ───────────────────────────────────────────────────
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // ── Helper: date → x ─────────────────────────────────────────────
+  function dateToX(d){
+    const days = (new Date(d) - minDate) / 86400000;
+    return LEFT_PAD + (days / totalDays) * CHART_W;
+  }
+
+  // ── Title ────────────────────────────────────────────────────────
+  ctx.fillStyle = '#041E42';
+  ctx.font = `700 15px ${FONT}`;
+  ctx.fillText(p.name, LEFT_PAD, 22);
+  ctx.fillStyle = '#8a96a3';
+  ctx.font = `400 10px ${FONT}`;
+  ctx.fillText(`${p.start} → ${p.end}  ·  ${p.manager||''}  ·  ${p.type||''}`, LEFT_PAD, 38);
+
+  // ── Timeline header ──────────────────────────────────────────────
+  const headerY = TOP_PAD;
+  ctx.fillStyle = '#f4f6f9';
+  ctx.fillRect(LEFT_PAD, headerY, CHART_W, HEADER_H);
+  ctx.strokeStyle = '#dde2ea';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(LEFT_PAD, headerY, CHART_W, HEADER_H);
+
+  // Month ticks
+  const cursor = new Date(minDate);
+  while(cursor <= maxDate){
+    const x = dateToX(cursor);
+    const label = MONTHS[cursor.getMonth()]+' \''+String(cursor.getFullYear()).slice(2);
+    // Vertical grid line
+    ctx.strokeStyle = '#e8eaee';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(x, headerY+HEADER_H); ctx.lineTo(x, CANVAS_H-BOTTOM_PAD); ctx.stroke();
+    ctx.setLineDash([]);
+    // Month label
+    ctx.fillStyle = '#445566';
+    ctx.font = `600 9.5px ${FONT}`;
+    ctx.fillText(label, x+4, headerY+HEADER_H/2+4);
+    cursor.setMonth(cursor.getMonth()+1);
+  }
+
+  // Start / Finish labels
+  ctx.fillStyle = '#041E42';
+  ctx.font = `700 8.5px ${FONT}`;
+  ctx.fillText('Start', LEFT_PAD, headerY+10);
+  ctx.textAlign='right';
+  ctx.fillText('Finish', LEFT_PAD+CHART_W, headerY+10);
+  ctx.textAlign='left';
+
+  // Start / finish date
+  ctx.fillStyle='#8a96a3';
+  ctx.font=`400 8px ${FONT}`;
+  ctx.fillText(p.start, LEFT_PAD, headerY+22);
+  ctx.textAlign='right';
+  ctx.fillText(p.end, LEFT_PAD+CHART_W, headerY+22);
+  ctx.textAlign='left';
+
+  // ── Phase rows ───────────────────────────────────────────────────
+  schedule.forEach((entry, i)=>{
+    const phKey = entry.phase;
+    const phInfo = PHASES[phKey] || {label:phKey, color:'#8a96a3'};
+    const barColor = phInfo.color;
+
+    const x1 = Math.max(LEFT_PAD, dateToX(entry.start));
+    const x2 = Math.min(LEFT_PAD+CHART_W, dateToX(entry.end));
+    const barW = Math.max(MIN_BAR_W, x2-x1);
+    const y = TOP_PAD + HEADER_H + i*(ROW_H+ROW_GAP) + ROW_GAP/2;
+    const barH = ROW_H;
+
+    // Subtle row bg
+    ctx.fillStyle = i%2===0 ? '#fafbfc' : '#f4f6f9';
+    ctx.fillRect(LEFT_PAD, y, CHART_W, barH);
+
+    // Bar shadow (subtle)
+    ctx.shadowColor='rgba(0,0,0,0.12)';
+    ctx.shadowBlur=4;
+    ctx.shadowOffsetY=2;
+
+    // Bar
+    ctx.fillStyle = barColor;
+    roundRect(ctx, x1, y+6, barW, barH-12, RADIUS);
+    ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+
+    // Bar label (phase name)
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 10px ${FONT}`;
+    ctx.save();
+    ctx.rect(x1+2, y, barW-4, barH); ctx.clip();
+    ctx.fillText(phInfo.label, x1+10, y+barH/2-2);
+    // Date range below label
+    ctx.font = `400 8.5px ${FONT}`;
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.fillText(`${entry.start.slice(5)} – ${entry.end.slice(5)}`, x1+10, y+barH/2+9);
+    ctx.restore();
+
+    // Start/end tick marks
+    ctx.strokeStyle = barColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x1, y+2); ctx.lineTo(x1, y+barH-2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2, y+2); ctx.lineTo(x2, y+barH-2); ctx.stroke();
+  });
+
+  // ── Bottom border line ───────────────────────────────────────────
+  const bottomY = TOP_PAD + HEADER_H + schedule.length*(ROW_H+ROW_GAP) + ROW_GAP/2;
+  ctx.strokeStyle='#dde2ea'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(LEFT_PAD, bottomY); ctx.lineTo(LEFT_PAD+CHART_W, bottomY); ctx.stroke();
+
+  // ── Milestone diamond at end ─────────────────────────────────────
+  const endX = dateToX(p.end);
+  const diamY = bottomY + 14;
+  ctx.fillStyle = '#041E42';
+  ctx.beginPath();
+  ctx.moveTo(endX, diamY-7);
+  ctx.lineTo(endX+7, diamY);
+  ctx.lineTo(endX, diamY+7);
+  ctx.lineTo(endX-7, diamY);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#445566'; ctx.font=`400 8.5px ${FONT}`;
+  ctx.textAlign='center';
+  ctx.fillText('Project End · '+p.end, endX, diamY+18);
+  ctx.textAlign='left';
+
+  return c;
+}
+
+// Helper: draw rounded rectangle path
+function roundRect(ctx, x, y, w, h, r){
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
 </script>
 </body>
 </html>
