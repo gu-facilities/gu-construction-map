@@ -155,7 +155,17 @@ header h1{font-family:'EB Garamond',serif;font-size:1.05rem;font-weight:500;colo
 .btn-add-shape{background:#f0f5ff;color:var(--navy);border:1.5px solid #c8d0e8;border-radius:5px;padding:5px 14px;font-family:'Source Sans 3',sans-serif;font-size:.72rem;font-weight:700;cursor:pointer;}
 .btn-ep-close{background:var(--navy);color:var(--gold);border:none;border-radius:5px;padding:7px 20px;font-family:'Source Sans 3',sans-serif;font-size:.75rem;font-weight:700;cursor:pointer;}
 
-/* ── MAP AREA ── */
+/* ── LOGIN ── */
+.login-overlay{position:fixed;inset:0;background:var(--navy);z-index:99999;display:flex;align-items:center;justify-content:center;}
+.login-box{background:#fff;border-radius:12px;padding:36px 40px;width:340px;box-shadow:0 8px 40px rgba(0,0,0,.4);text-align:center;}
+.login-box .gu-logo{font-family:'EB Garamond',serif;background:var(--gold);color:var(--navy);font-size:1.4rem;font-weight:600;padding:8px 18px;border-radius:5px;letter-spacing:2px;display:inline-block;margin-bottom:18px;}
+.login-box h2{font-family:'EB Garamond',serif;font-size:1.2rem;color:var(--navy);margin-bottom:4px;}
+.login-box p{font-size:.72rem;color:#8a96a3;margin-bottom:22px;}
+.login-box input{width:100%;padding:9px 12px;border:1.5px solid #dde2ea;border-radius:6px;font-family:'Source Sans 3',sans-serif;font-size:.8rem;color:var(--navy);margin-bottom:10px;outline:none;transition:border-color .15s;}
+.login-box input:focus{border-color:var(--gold);}
+.login-btn{width:100%;padding:10px;background:var(--navy);color:var(--gold);border:none;border-radius:6px;font-family:'Source Sans 3',sans-serif;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:background .15s;margin-top:4px;}
+.login-btn:hover{background:#0a2d5a;}
+.login-error{font-size:.72rem;color:#c0304a;margin-top:8px;min-height:18px;}
 .map-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
 .toolbar{background:var(--navy2);padding:5px 10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;border-bottom:1px solid #0d2d56;position:relative;z-index:500;}
 .tlbl{color:#3a5878;font-size:.6rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;white-space:nowrap;}
@@ -261,6 +271,21 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </svg>
 </head>
 <body>
+<!-- LOGIN OVERLAY -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <div class="gu-logo">GU</div>
+    <h2>Facilities Management</h2>
+    <p>Construction Map · Restricted Access</p>
+    <input type="text" id="loginUser" placeholder="Username" autocomplete="username"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
 <header>
   <span class="gu-mark">GU</span>
   <h1>Facilities Management — Construction Map</h1>
@@ -297,23 +322,27 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
         </button>
       </div>
     </div>
+    <div class="filter-bar" style="background:#0a1a30;padding:4px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #0a1e35;">
+      <span class="tlbl" style="color:#2a4a6a">Campus</span>
+      <button class="ltbtn active" id="camp-hilltop" onclick="setCampus('hilltop',this)">Hilltop</button>
+      <button class="ltbtn" id="camp-capitol" onclick="setCampus('capitol',this)">Capitol</button>
+    </div>
     <div class="filter-bar">
-      <span class="tlbl" style="color:#2a4a6a">Filter</span>
-      <span class="filter-pill on" data-type="New Construction (Building, Structure, etc.)" onclick="toggleType(this)">New Construction</span>
-      <span class="filter-pill on" data-type="Renovation"           onclick="toggleType(this)">Renovation</span>
-      <span class="filter-pill on" data-type="Infrastructure"       onclick="toggleType(this)">Infrastructure</span>
-      <span class="filter-pill on" data-type="Maintenance & Repair" onclick="toggleType(this)">Maintenance</span>
-      <span class="filter-pill on" data-type="Landscape"            onclick="toggleType(this)">Landscape</span>
-      <span class="filter-pill on" data-type="ENGIE Project"        onclick="toggleType(this)">ENGIE</span>
-      <span class="filter-pill on" data-type="Redgate Project"      onclick="toggleType(this)">Redgate</span>
+      <span class="tlbl" style="color:#2a4a6a">Category</span>
+      <span class="filter-pill on" data-type="Capital Projects"    onclick="toggleType(this)">Capital Projects</span>
+      <span class="filter-pill on" data-type="Deferred Maintenance" onclick="toggleType(this)">Deferred Maintenance</span>
+      <span class="filter-pill on" data-type="Utilities/Energy"   onclick="toggleType(this)">Utilities/Energy</span>
+      <span class="filter-pill on" data-type="Landscape"          onclick="toggleType(this)">Landscape</span>
     </div>
     <div class="stage-bar">
-      <span class="tlbl" style="color:#2a4060">Project Stage</span>
-      <span class="spill on" data-stage="charter"      style="background:#534AB7" onclick="toggleStage(this)">Charter/Procurement</span>
-      <span class="spill on" data-stage="design"       style="background:#D4A800" onclick="toggleStage(this)">Design</span>
-      <span class="spill on" data-stage="pre"          style="background:#BA7517" onclick="toggleStage(this)">Preconstruction</span>
-      <span class="spill on" data-stage="construction" style="background:#D85A30" onclick="toggleStage(this)">Under Construction</span>
-      <span class="spill on" data-stage="closeout"     style="background:#639922" onclick="toggleStage(this)">Closeout</span>
+      <span class="tlbl" style="color:#2a4060">Phase</span>
+      <span class="spill on" data-stage="programming"       style="background:#6A5ACD" onclick="toggleStage(this)">Programming</span>
+      <span class="spill on" data-stage="design_proc"       style="background:#4682B4" onclick="toggleStage(this)">Design Procurement</span>
+      <span class="spill on" data-stage="design"            style="background:#D4A800" onclick="toggleStage(this)">Design</span>
+      <span class="spill on" data-stage="construction_proc" style="background:#BA7517" onclick="toggleStage(this)">Construction Procurement</span>
+      <span class="spill on" data-stage="construction"      style="background:#D85A30" onclick="toggleStage(this)">Construction</span>
+      <span class="spill on" data-stage="closeout"          style="background:#639922" onclick="toggleStage(this)">In Closeout</span>
+      <span class="spill on" data-stage="on_hold"           style="background:#8a96a3" onclick="toggleStage(this)">On Hold</span>
     </div>
     <div class="drawing-banner" id="drawingBanner">
       <span id="bannerMsg">Click to place points · Double-click to finish</span>
@@ -437,22 +466,38 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
           <input type="text" id="wiz-name" placeholder="e.g. White-Gravenor Hall Renovation"></div>
         <div class="wf full"><label>Project Manager <span style="color:#c0304a">*</span></label>
           <input type="text" id="wiz-manager" placeholder="e.g. Jane Smith"></div>
-        <div class="wf"><label>Project Type</label>
-          <select id="wiz-type">
-            <option>New Construction (Building, Structure, etc.)</option>
-            <option>Renovation</option><option>Infrastructure</option>
-            <option>Maintenance &amp; Repair</option><option>Landscape</option>
-            <option>ENGIE Project</option><option>Redgate Project</option>
+        <div class="wf full"><label>Project Type <span style="color:#c0304a">*</span></label>
+          <select id="wiz-proj-type" onchange="onWizProjTypeChange()">
+            <option value="">— Select —</option>
+            <option value="Charter">Charter</option>
+            <option value="Procurement">Procurement</option>
           </select></div>
-        <div class="wf full"><label>Starting Phase <span style="color:#c0304a">*</span></label>
+        <div class="wf full" id="wiz-charter-status-row" style="display:none;">
+          <label>Charter Status <span style="color:#c0304a">*</span></label>
+          <select id="wiz-charter-status">
+            <option value="Approved">Approved</option>
+            <option value="Tentative">Tentative</option>
+            <option value="Not Approved">Not Approved</option>
+          </select></div>
+        <div class="wf full"><label>Project Category <span style="color:#c0304a">*</span></label>
+          <select id="wiz-type">
+            <option value="">— Select —</option>
+            <option value="Capital Projects">Capital Projects</option>
+            <option value="Deferred Maintenance">Deferred Maintenance</option>
+            <option value="Utilities/Energy">Utilities/Energy</option>
+            <option value="Landscape">Landscape</option>
+          </select></div>
+        <div class="wf full"><label>Current Phase <span style="color:#c0304a">*</span></label>
           <select id="wiz-phase" onchange="buildPhaseSchedule()">
-            <option value="charter">Charter/Procurement</option>
+            <option value="programming">Programming</option>
+            <option value="design_proc">Design Procurement</option>
             <option value="design">Design</option>
-            <option value="pre">Preconstruction</option>
-            <option value="construction">Under Construction</option>
-            <option value="closeout">Closeout</option>
+            <option value="construction_proc">Construction Procurement</option>
+            <option value="construction">Construction</option>
+            <option value="closeout">In Closeout</option>
+            <option value="on_hold">On Hold</option>
           </select>
-          <div style="font-size:.62rem;color:#889;margin-top:3px;">Select the phase the project is currently in. Date fields will appear for this phase and all subsequent phases.</div>
+          <div style="font-size:.62rem;color:#889;margin-top:3px;">Select the phase the project is currently in.</div>
         </div>
         <div class="wf full" id="phaseScheduleGrid" style="margin-top:2px;"></div>
         <div class="wf full"><label>Description <span style="color:#c0304a">*</span></label>
@@ -574,18 +619,34 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
         <input type="text" id="edit-name" placeholder="Project name"></div>
       <div class="wf full"><label>Project Manager</label>
         <input type="text" id="edit-manager" placeholder="Project manager"></div>
-      <div class="wf"><label>Project Type</label>
-        <select id="edit-type">
-          <option>New Construction (Building, Structure, etc.)</option>
-          <option>Renovation</option><option>Infrastructure</option>
-          <option>Maintenance &amp; Repair</option><option>Landscape</option>
-          <option>ENGIE Project</option><option>Redgate Project</option>
+      <div class="wf full"><label>Project Type</label>
+        <select id="edit-proj-type" onchange="onEditProjTypeChange()">
+          <option value="Charter">Charter</option>
+          <option value="Procurement">Procurement</option>
         </select></div>
-      <div class="wf"><label>Phase</label>
+      <div class="wf full" id="edit-charter-status-row">
+        <label>Charter Status</label>
+        <select id="edit-charter-status">
+          <option value="Approved">Approved</option>
+          <option value="Tentative">Tentative</option>
+          <option value="Not Approved">Not Approved</option>
+        </select></div>
+      <div class="wf full"><label>Project Category</label>
+        <select id="edit-type">
+          <option value="Capital Projects">Capital Projects</option>
+          <option value="Deferred Maintenance">Deferred Maintenance</option>
+          <option value="Utilities/Energy">Utilities/Energy</option>
+          <option value="Landscape">Landscape</option>
+        </select></div>
+      <div class="wf full"><label>Current Phase</label>
         <select id="edit-phase">
-          <option value="charter">Charter/Procurement</option><option value="design">Design</option>
-          <option value="pre">Preconstruction</option><option value="construction">Under Construction</option>
-          <option value="closeout">Closeout</option>
+          <option value="programming">Programming</option>
+          <option value="design_proc">Design Procurement</option>
+          <option value="design">Design</option>
+          <option value="construction_proc">Construction Procurement</option>
+          <option value="construction">Construction</option>
+          <option value="closeout">In Closeout</option>
+          <option value="on_hold">On Hold</option>
         </select></div>
       <div class="wf"><label>Start Date</label>
         <input type="date" id="edit-start"></div>
@@ -666,26 +727,33 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
-const PHASES={charter:{label:'Charter/Procurement',color:'#534AB7'},design:{label:'Design',color:'#D4A800'},pre:{label:'Preconstruction',color:'#BA7517'},construction:{label:'Under Construction',color:'#D85A30'},closeout:{label:'Closeout',color:'#639922'},staging:{label:'Staging Area',color:'#378ADD'},road:{label:'Road Closure',color:'#E24B4A'}};
+
+// ── PHASES (updated) ─────────────────────────────────────────────────
+const PHASES={
+  programming:      {label:'Programming',           color:'#6A5ACD'},
+  design_proc:      {label:'Design Procurement',    color:'#4682B4'},
+  design:           {label:'Design',                color:'#D4A800'},
+  construction_proc:{label:'Construction Procurement',color:'#BA7517'},
+  construction:     {label:'Construction',          color:'#D85A30'},
+  closeout:         {label:'In Closeout',           color:'#639922'},
+  on_hold:          {label:'On Hold',               color:'#8a96a3'},
+  staging:          {label:'Staging Area',          color:'#378ADD'},
+  road:             {label:'Road Closure',          color:'#E24B4A'}
+};
+
+// ── PROJECT CATEGORIES ───────────────────────────────────────────────
+const CATEGORIES=['Capital Projects','Deferred Maintenance','Utilities/Energy','Landscape'];
+
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-let projects=[
-  {id:1,name:'Lauinger Library Renovation',type:'Renovation',phase:'construction',start:'2025-08-01',end:'2026-06-30',desc:'Structural and interior updates.',shapes:[{type:'pin',lat:38.9076,lng:-77.0737}]},
-  {id:2,name:'Healy Hall Restoration',type:'Renovation',phase:'design',start:'2025-11-01',end:'2027-03-31',desc:'Facade restoration.',shapes:[{type:'pin',lat:38.9072,lng:-77.0724}]},
-  {id:3,name:'SW Quadrangle Infrastructure',type:'Infrastructure',phase:'pre',start:'2026-02-01',end:'2026-12-31',desc:'Underground utility improvements.',shapes:[{type:'pin',lat:38.9055,lng:-77.0748}]},
-  {id:4,name:'Regents Hall HVAC',type:'Maintenance & Repair',phase:'closeout',start:'2025-06-01',end:'2026-01-31',desc:'Full HVAC replacement.',shapes:[{type:'pin',lat:38.9068,lng:-77.0741}]},
-  {id:5,name:'Canal Road Entrance',type:'Infrastructure',phase:'charter',start:'2026-06-01',end:'2027-08-31',desc:'Entrance redesign.',shapes:[{type:'pin',lat:38.9022,lng:-77.0762}]},
-  {id:6,name:'MedStar Expansion Wing',type:'New Construction (Building, Structure, etc.)',phase:'construction',start:'2025-05-01',end:'2027-12-31',desc:'New patient care wing.',shapes:[{type:'pin',lat:38.9109,lng:-77.0764}]},
-  {id:7,name:'Shaw Field Staging Area',type:'Landscape',phase:'construction',start:'2026-01-01',end:'2026-09-30',desc:'Temporary staging area.',shapes:[{type:'pin',lat:38.9081,lng:-77.0762,isStagingArea:true}]},
-  {id:8,name:'Old North Streetscape',type:'Landscape',phase:'design',start:'2026-03-01',end:'2026-11-30',desc:'Pedestrian pathway improvements.',shapes:[{type:'pin',lat:38.9067,lng:-77.0718}]},
-  {id:9,name:'Tondorf Road Closure',type:'Infrastructure',phase:'pre',start:'2026-04-01',end:'2026-07-31',desc:'Temporary road closure.',shapes:[{type:'pin',lat:38.9060,lng:-77.0740,isRoadClosure:true}]},
-];
-let nextId=10;
+let projects=[];
+let nextId=1;
 
 // State
 let tool='pan',currentPhase='construction';
-let visibleStages=new Set(Object.keys(PHASES).filter(k=>k!=='staging'&&k!=='road'));
-let visibleTypes=new Set(['New Construction (Building, Structure, etc.)','Renovation','Infrastructure','Maintenance & Repair','Landscape','ENGIE Project','Redgate Project']);
+let visibleStages=new Set(['programming','design_proc','design','construction_proc','construction','closeout','on_hold']);
+let visibleTypes=new Set(CATEGORIES);
+let currentCampus='hilltop'; // 'hilltop' | 'capitol'
 const _now=new Date();let tlStart=new Date(_now.getFullYear(),_now.getMonth(),1),tlMonths=12,tlSelectedMonth=0;
 let filterStart=null,filterEnd=null,tlWindowMonths=1;
 let dayMode=false; // true when 1 Yr selected — timeline shows individual days
@@ -710,11 +778,51 @@ let editProjectId=null,editDrawing=false,editDrawTool=null,editDrawSection='exte
 // Playback
 let playing=false,playInterval=null;
 
+// ── LOGIN ────────────────────────────────────────────────────────────
+function doLogin(){
+  const user=document.getElementById('loginUser').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  if(user==='PFM_CP'&&pass==='HoyaSaxa'){
+    document.getElementById('loginOverlay').style.display='none';
+  } else {
+    const err=document.getElementById('loginError');
+    err.textContent='Incorrect username or password.';
+    document.getElementById('loginPass').value='';
+    setTimeout(()=>err.textContent='',3000);
+  }
+}
+
+// ── CAMPUS ──────────────────────────────────────────────────────────
+function setCampus(campus, btn){
+  currentCampus=campus;
+  document.querySelectorAll('[id^="camp-"]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const c=CAMPUSES[campus];
+  map.setMaxBounds(null);
+  map.flyTo(c.center, c.zoom, {duration:1});
+  setTimeout(()=>map.setMaxBounds(c.bounds), 1200);
+  refreshMap();renderSidebar();updateStats();
+}
+
+// ── WIZARD PROJECT TYPE TOGGLE ────────────────────────────────────────
+function onWizProjTypeChange(){
+  const val=document.getElementById('wiz-proj-type').value;
+  document.getElementById('wiz-charter-status-row').style.display=(val==='Charter')?'':'none';
+}
+function onEditProjTypeChange(){
+  const val=document.getElementById('edit-proj-type').value;
+  document.getElementById('edit-charter-status-row').style.display=(val==='Charter')?'':'none';
+}
+const CAMPUSES={
+  hilltop:{label:'Hilltop Campus', center:[38.9072,-77.0741], zoom:17, bounds:[[38.889,-77.096],[38.924,-77.054]]},
+  capitol:{label:'Capitol Campus', center:[38.9076,-77.0036], zoom:17, bounds:[[38.895,-77.020],[38.920,-76.988]]}
+};
+
 // ── LEAFLET ─────────────────────────────────────────────────────────
 const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,attribution:'Tiles © Esri'});
 const streets=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
-const map=L.map('map',{center:[38.9072,-77.0741],zoom:17,layers:[satellite],doubleClickZoom:false});
-map.setMaxBounds([[38.889,-77.096],[38.924,-77.054]]);
+const map=L.map('map',{center:CAMPUSES.hilltop.center,zoom:CAMPUSES.hilltop.zoom,layers:[satellite],doubleClickZoom:false});
+map.setMaxBounds(CAMPUSES.hilltop.bounds);
 
 // ── DRAGGABLE POPUPS ─────────────────────────────────────────────────
 map.on('popupopen', function(e) {
@@ -842,8 +950,16 @@ function hideVertexHandles(){
 }
 
 // ── PHASE SCHEDULE ───────────────────────────────────────────────────
-const PHASE_ORDER=['charter','design','pre','construction','closeout'];
-const PHASE_LABELS={charter:'Charter/Procurement',design:'Design',pre:'Preconstruction',construction:'Under Construction',closeout:'Closeout'};
+const PHASE_ORDER=['programming','design_proc','design','construction_proc','construction','closeout','on_hold'];
+const PHASE_LABELS={
+  programming:'Programming',
+  design_proc:'Design Procurement',
+  design:'Design',
+  construction_proc:'Construction Procurement',
+  construction:'Construction',
+  closeout:'In Closeout',
+  on_hold:'On Hold'
+};
 
 function buildPhaseSchedule(){
   _manuallyEdited.clear();
@@ -1077,6 +1193,7 @@ function refreshMap(){
   const {ws:_ws,we:_we}=getTlWindow();
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
+    if((p.campus||'hilltop')!==currentCampus)return;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(!showAllProjects&&(ps>_we||pe<_ws))return;
     const midMonth=new Date((_ws.getTime()+_we.getTime())/2);
@@ -1439,8 +1556,13 @@ dc.addEventListener('dblclick',e=>{
 function openWizard(){
   wizardOpen=true;wizardDrawing=false;wizDrawContext=null;wizCurrentLLs=[];
   wizExtentShapes=[];wizStagingShapes=[];wizRoadShapes=[];wizPedShapes=[];stagingYN=false;roadYN=false;
-  document.getElementById('wiz-name').value='';document.getElementById('wiz-manager').value='';document.getElementById('wiz-desc').value='';
-  document.getElementById('wiz-phase').value='charter';
+  document.getElementById('wiz-name').value='';
+  document.getElementById('wiz-manager').value='';
+  document.getElementById('wiz-desc').value='';
+  document.getElementById('wiz-proj-type').value='';
+  document.getElementById('wiz-charter-status-row').style.display='none';
+  document.getElementById('wiz-type').value='';
+  document.getElementById('wiz-phase').value='programming';
   buildPhaseSchedule();
   ['stg','road','ped'].forEach(t=>{
     const chk=document.getElementById(t+'-match-chk');
@@ -1729,11 +1851,16 @@ function saveProject(){
   const manager=document.getElementById('wiz-manager').value.trim();
   const desc=document.getElementById('wiz-desc').value.trim();
   const startingPhase=document.getElementById('wiz-phase').value;
+  const projType=document.getElementById('wiz-proj-type').value;
+  const charterStatus=(projType==='Charter')?document.getElementById('wiz-charter-status').value:'';
+  const category=document.getElementById('wiz-type').value;
   const phaseSchedule=readPhaseSchedule();
   const errors=[];
-  if(!name)    errors.push('• Project Name');
-  if(!manager) errors.push('• Project Manager');
-  if(!desc)    errors.push('• Description');
+  if(!name)     errors.push('• Project Name');
+  if(!manager)  errors.push('• Project Manager');
+  if(!projType) errors.push('• Project Type');
+  if(!category) errors.push('• Project Category');
+  if(!desc)     errors.push('• Description');
   if(phaseSchedule.errors.length) phaseSchedule.errors.forEach(e=>errors.push(e));
   if(!wizExtentShapes.length) errors.push('• Project Extents (mark at least one pin or area on the map)');
   if(errors.length){
@@ -1757,13 +1884,18 @@ function saveProject(){
       start:pedTimeline.start,end:pedTimeline.end,
       phaseSchedule:pedTimeline.phaseSchedule||[]}))
   ];
-  const p={id:nextId++,name,manager,type:document.getElementById('wiz-type').value,
-    phase:startingPhase,start:startVal,end:endVal,desc:desc,
+  const p={id:nextId++,name,manager,
+    projType,charterStatus,
+    type:category,
+    campus:currentCampus,
+    phase:startingPhase,start:startVal,end:endVal,desc,
     phaseSchedule:phaseSchedule.entries,shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
   showHint(`Saving "${p.name}"…`,1500);
-  apiPost({action:'create',project:{...p,phaseSchedule:p.phaseSchedule||[],stagingYN:!!p.shapes.some(s=>s.isStagingArea),roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
+  apiPost({action:'create',project:{...p,phaseSchedule:p.phaseSchedule||[],
+    stagingYN:!!p.shapes.some(s=>s.isStagingArea),
+    roadYN:!!p.shapes.some(s=>s.isRoadClosure)}}).then(res=>{
     if(res&&res.id){const idx=projects.findIndex(x=>x.id===p.id);if(idx>=0)projects[idx].id=res.id;renderSidebar();showHint(`✓ "${p.name}" saved`,2500);}
     else showHint(`⚠ Saved locally only`,3000);
   });
@@ -1788,11 +1920,18 @@ function openEditExtents(){
   document.getElementById('edit-desc').value    = p.desc    || '';
   document.getElementById('edit-start').value   = p.start   || '';
   document.getElementById('edit-end').value     = p.end     || '';
+  // Project Type + Charter Status
+  const projTypeEl=document.getElementById('edit-proj-type');
+  projTypeEl.value = p.projType||'Charter';
+  const csRow=document.getElementById('edit-charter-status-row');
+  csRow.style.display=(projTypeEl.value==='Charter')?'':'none';
+  document.getElementById('edit-charter-status').value = p.charterStatus||'Approved';
+  // Category
   const typeEl=document.getElementById('edit-type');
   for(let i=0;i<typeEl.options.length;i++){
     if(typeEl.options[i].value===p.type||typeEl.options[i].text===p.type){typeEl.selectedIndex=i;break;}
   }
-  document.getElementById('edit-phase').value = p.phase || 'construction';
+  document.getElementById('edit-phase').value = p.phase || 'programming';
   buildEditPhaseSchedule(p);
   renderEditShapes();
   buildEditShapeTimeline(p, 'stg', 'edit-stg-phase-grid');
@@ -2147,6 +2286,8 @@ function closeEditPanel(save){
       if(!newName){alert('Project name cannot be empty.');return;}
       p.name    = newName;
       p.manager = document.getElementById('edit-manager').value.trim();
+      p.projType= document.getElementById('edit-proj-type').value;
+      p.charterStatus=(p.projType==='Charter')?document.getElementById('edit-charter-status').value:'';
       p.type    = document.getElementById('edit-type').value;
       p.phase   = document.getElementById('edit-phase').value;
       p.desc    = document.getElementById('edit-desc').value.trim();
@@ -2460,7 +2601,7 @@ function buildProjectCard(p, _ws, _we){
   const ps=new Date(p.start),pe=new Date(p.end);
   const pct=Math.round(Math.min(Math.max(midMonth-ps,0),pe-ps)/(pe-ps)*100);
   const col=(PHASES[activePhase]||PHASES[p.phase]).color;
-  const opts=Object.entries(PHASES).filter(([k])=>k!=='staging'&&k!=='road').map(([k,v])=>`<option value="${k}"${k===p.phase?' selected':''}>${v.label}</option>`).join('');
+  const opts=Object.entries(PHASES).filter(([k])=>!['staging','road'].includes(k)).map(([k,v])=>`<option value="${k}"${k===p.phase?' selected':''}>${v.label}</option>`).join('');
   return `<div class="pcard" style="border-left-color:${col}" onclick="focusProject('${p.id}')" oncontextmenu="showContextMenu(event,'${p.id}')">
     <span class="badge" style="background:${col}">${(PHASES[activePhase]||PHASES[p.phase]).label}</span>
     <div class="pname">${p.name}</div>
@@ -2479,6 +2620,7 @@ function buildProjectsHTML(){
   // Filter projects to visible ones in window
   const visible=projects.filter(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type)) return false;
+    if((p.campus||'hilltop')!==currentCampus) return false;
     const ps=new Date(p.start),pe=new Date(p.end);
     if(!showAllProjects&&(ps>_we||pe<_ws)) return false;
     return true;
@@ -2511,36 +2653,24 @@ function buildProjectsHTML(){
       </div>`;
     });
   } else {
-    // Group by type
-    const typeOrder=[
-      'New Construction (Building, Structure, etc.)',
-      'Renovation','Infrastructure','Maintenance & Repair',
-      'Landscape','ENGIE Project','Redgate Project'
-    ];
-    const typeLabels={
-      'New Construction (Building, Structure, etc.)':'New Construction',
-      'Renovation':'Renovation','Infrastructure':'Infrastructure',
-      'Maintenance & Repair':'Maintenance & Repair',
-      'Landscape':'Landscape','ENGIE Project':'ENGIE Project',
-      'Redgate Project':'Redgate Project'
-    };
+    // Group by category
+    const typeOrder=['Capital Projects','Deferred Maintenance','Utilities/Energy','Landscape'];
     const typeColors={
-      'New Construction (Building, Structure, etc.)':'#4A7FC1',
-      'Renovation':'#7B5EA7','Infrastructure':'#3A9E7A',
-      'Maintenance & Repair':'#B85C38','Landscape':'#5F8F3A',
-      'ENGIE Project':'#C4842A','Redgate Project':'#8A3A3A'
+      'Capital Projects':'#4A7FC1',
+      'Deferred Maintenance':'#B85C38',
+      'Utilities/Energy':'#3A9E7A',
+      'Landscape':'#5F8F3A'
     };
     typeOrder.forEach(type=>{
       const grpProjects=visible.filter(p=>p.type===type);
       if(!grpProjects.length) return;
       grpProjects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
       const col=typeColors[type]||'#667';
-      const label=typeLabels[type]||type;
       const key='type-'+type.replace(/[^a-z0-9]/gi,'_');
       const isOpen=!collapsedGroups.has(key);
       html+=`<div class="pgroup-header" onclick="toggleGroup('${key}')">
         <div class="pgroup-dot" style="background:${col}"></div>
-        <span class="pgroup-label">${label}</span>
+        <span class="pgroup-label">${type}</span>
         <span class="pgroup-count">${grpProjects.length}</span>
         <span class="pgroup-arrow${isOpen?' open':''}" id="grparrow-${key}">▶</span>
       </div>
@@ -2552,13 +2682,21 @@ function buildProjectsHTML(){
 
   return html;
 }
-function buildLegendHTML(){return '<div style="padding:4px 2px 10px;font-size:.62rem;font-weight:700;letter-spacing:.7px;color:#8a9ab0;text-transform:uppercase">Phase Colors</div>'+Object.entries(PHASES).map(([k,v])=>`<div class="leg-row"><div class="leg-sw" style="background:${v.color}"></div><span>${v.label}</span></div>`).join('');}
-function buildMiniLegend(){document.getElementById('miniLegend').innerHTML=Object.entries(PHASES).map(([k,v])=>`<div class="mleg-i"><div class="mleg-d" style="background:${v.color}"></div>${v.label}</div>`).join('');}
+function buildLegendHTML(){
+  const phaseKeys=['programming','design_proc','design','construction_proc','construction','closeout','on_hold'];
+  return '<div style="padding:4px 2px 10px;font-size:.62rem;font-weight:700;letter-spacing:.7px;color:#8a9ab0;text-transform:uppercase">Phase Colors</div>'+
+    phaseKeys.map(k=>`<div class="leg-row"><div class="leg-sw" style="background:${PHASES[k].color}"></div><span>${PHASES[k].label}</span></div>`).join('');
+}
+function buildMiniLegend(){
+  const phaseKeys=['programming','design_proc','design','construction_proc','construction','closeout','on_hold'];
+  document.getElementById('miniLegend').innerHTML=phaseKeys.map(k=>`<div class="mleg-i"><div class="mleg-d" style="background:${PHASES[k].color}"></div>${PHASES[k].label}</div>`).join('');
+}
 function updateStats(){
   const {ws:_ws,we:_we}=getTlWindow();
   let a=0,c=0,pr=0,pl=0;
   projects.forEach(p=>{
     if(!visibleStages.has(p.phase)||!visibleTypes.has(p.type))return;
+    if((p.campus||'hilltop')!==currentCampus)return;
     if(!showAllProjects&&(new Date(p.start)>_we||new Date(p.end)<_ws))return;
     a++;if(p.phase==='construction')c++;else if(p.phase==='pre')pr++;else if(p.phase==='charter'||p.phase==='design')pl++;
   });
