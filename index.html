@@ -748,6 +748,28 @@ const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsL
 async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
 
+// ── DATE NORMALIZATION ───────────────────────────────────────────────
+// Ensures all date strings in a project are YYYY-MM-DD after loading from sheet.
+function normalizeProjectDates(p){
+  function toYMD(v){
+    if(!v) return '';
+    const s=String(v);
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const d=new Date(s);
+    if(!isNaN(d)) return d.toISOString().slice(0,10);
+    return s.slice(0,10);
+  }
+  return {...p,
+    start:toYMD(p.start),
+    end:toYMD(p.end),
+    phaseSchedule:(p.phaseSchedule||[]).map(e=>({...e,start:toYMD(e.start),end:toYMD(e.end)})),
+    shapes:(p.shapes||[]).map(s=>({...s,
+      start:toYMD(s.start),end:toYMD(s.end),
+      phaseSchedule:(s.phaseSchedule||[]).map(e=>({...e,start:toYMD(e.start),end:toYMD(e.end)}))
+    }))
+  };
+}
+
 // ── PHASES (updated) ─────────────────────────────────────────────────
 const PHASES={
   programming:      {label:'Programming',           color:'#6A5ACD'},
@@ -1184,10 +1206,7 @@ async function manualRefresh(){
   showHint('Refreshing projects…',0);
   const loaded=await apiGet();
   if(loaded&&loaded.length){
-    projects=loaded.map(p=>({...p,
-      start:p.start?String(p.start).slice(0,10):p.start,
-      end:p.end?String(p.end).slice(0,10):p.end
-    }));
+    projects=loaded.map(p=>normalizeProjectDates(p));
     refreshMap();renderSidebar();buildMiniLegend();updateStats();
     showHint('✓ Projects refreshed',2500);
   } else {
@@ -2744,7 +2763,7 @@ setTimeout(()=>map.invalidateSize(),100);
   showHint('Loading projects…',0);
   const loaded=await apiGet();
   if(loaded&&loaded.length){
-    projects=loaded.map(p=>({...p,start:p.start?String(p.start).slice(0,10):p.start,end:p.end?String(p.end).slice(0,10):p.end}));
+    projects=loaded.map(p=>normalizeProjectDates(p));
     showHint('Projects loaded ✓',2000);
   } else showHint('Drag to pan · Scroll to zoom · Click a dot to inspect',3500);
   refreshMap();renderSidebar();buildMiniLegend();updateStats();
