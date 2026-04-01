@@ -745,7 +745,16 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 
 <script>
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
-async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
+async function apiGet(){
+  try{
+    const r=await fetch(SHEET_API);
+    const d=await r.json();
+    if(d.projects&&d.projects.length){
+      console.log('API first project sample:',JSON.stringify(d.projects[0]).slice(0,500));
+    }
+    return d.projects||null;
+  }catch(e){console.error('apiGet error:',e);return null;}
+}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
 
 // ── DATE NORMALIZATION ───────────────────────────────────────────────
