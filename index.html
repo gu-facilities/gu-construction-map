@@ -745,16 +745,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 
 <script>
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
-async function apiGet(){
-  try{
-    const r=await fetch(SHEET_API);
-    const d=await r.json();
-    if(d.projects&&d.projects.length){
-      console.log('API first project sample:',JSON.stringify(d.projects[0]).slice(0,500));
-    }
-    return d.projects||null;
-  }catch(e){console.error('apiGet error:',e);return null;}
-}
+async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
 
 // ── DATE NORMALIZATION ───────────────────────────────────────────────
@@ -762,10 +753,21 @@ async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encod
 function normalizeProjectDates(p){
   function toYMD(v){
     if(!v) return '';
-    const s=String(v);
+    const s=String(v).trim();
+    // Already YYYY-MM-DD
     if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // ISO string with time — just slice the date part directly, don't parse through Date()
+    // (parsing through Date() applies timezone offset and can shift the day)
+    if(/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0,10);
+    // Try parsing as date (last resort)
     const d=new Date(s);
-    if(!isNaN(d)) return d.toISOString().slice(0,10);
+    if(!isNaN(d)){
+      // Use UTC to avoid timezone shift
+      const yr=d.getUTCFullYear();
+      const mo=String(d.getUTCMonth()+1).padStart(2,'0');
+      const dy=String(d.getUTCDate()).padStart(2,'0');
+      return `${yr}-${mo}-${dy}`;
+    }
     return s.slice(0,10);
   }
   return {...p,
