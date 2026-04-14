@@ -864,14 +864,14 @@ let playing=false,playInterval=null;
 // ── LOGIN ────────────────────────────────────────────────────────────
 function doLogin(){
   const user=document.getElementById('loginUser').value.trim();
-  const pass=document.getElementById('loginPass').value;
+  const pass=document.getElementById('loginPass').value.trim();
   if(user==='PFM_CP'&&pass==='HoyaSaxa'){
     document.getElementById('loginOverlay').style.display='none';
   } else {
     const err=document.getElementById('loginError');
-    err.textContent='Incorrect username or password.';
+    err.textContent='Incorrect username or password. (Username: PFM_CP)';
     document.getElementById('loginPass').value='';
-    setTimeout(()=>err.textContent='',3000);
+    setTimeout(()=>err.textContent='',4000);
   }
 }
 
