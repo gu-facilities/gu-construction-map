@@ -3204,6 +3204,7 @@ function updateStats(){
     if(currentPMFilter&&p.manager!==currentPMFilter)return;
     if(!showAllProjects&&(new Date(p.start)>_we||new Date(p.end)<_ws))return;
     a++;if(p.phase==='construction')c++;else if(p.phase==='construction_proc')pr++;else if(['programming','design_proc','design'].includes(p.phase))pl++;
+  });
   document.getElementById('s-active').textContent=a;document.getElementById('s-constr').textContent=c;document.getElementById('s-pre').textContent=pr;document.getElementById('s-plan').textContent=pl;
 }
 
