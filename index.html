@@ -330,7 +330,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
       <div style="margin-left:16px;display:flex;align-items:center;gap:6px;">
         <span class="tlbl" style="color:#2a4a6a">PM</span>
         <select id="pmFilter" onchange="setPMFilter(this.value)"
-          style="padding:3px 7px;font-family:'Source Sans 3',sans-serif;font-size:.65rem;border-radius:4px;border:1.5px solid #1e3e64;background:#051628;color:#b0ccee;cursor:pointer;max-width:160px;">
+          style="padding:3px 7px;font-family:'Source Sans 3',sans-serif;font-size:.65rem;border-radius:4px;border:1.5px solid #1e3e64;background:#051628;color:#b0ccee;cursor:pointer;max-width:170px;">
           <option value="">All PMs</option>
         </select>
       </div>
@@ -765,19 +765,6 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </div>
 
 <script>
-// ── LOGIN — defined first so button onclick works immediately ────────
-function doLogin(){
-  const user=document.getElementById('loginUser').value.trim();
-  const pass=document.getElementById('loginPass').value.trim();
-  if(user==='PFM_CP'&&pass==='HoyaSaxa'){
-    document.getElementById('loginOverlay').style.display='none';
-  } else {
-    const err=document.getElementById('loginError');
-    err.textContent='Incorrect username or password.';
-    document.getElementById('loginPass').value='';
-    setTimeout(()=>err.textContent='',4000);
-  }
-}
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
 async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
@@ -848,7 +835,8 @@ let nextId=1;
 // State
 let tool='pan',currentPhase='construction';
 let visibleStages=new Set(['programming','design_proc','design','construction_proc','construction','closeout','on_hold']);
-let visibleTypes=new Set(CATEGORIES);let currentCampus='hilltop'; // 'hilltop' | 'capitol'
+let visibleTypes=new Set(CATEGORIES);
+let currentCampus='hilltop'; // 'hilltop' | 'capitol'
 let currentPMFilter=''; // '' = all PMs
 const _now=new Date();let tlStart=new Date(_now.getFullYear(),_now.getMonth(),1),tlMonths=12,tlSelectedMonth=0;
 let filterStart=null,filterEnd=null,tlWindowMonths=1;
@@ -875,6 +863,19 @@ let editProjectId=null,editDrawing=false,editDrawTool=null,editDrawSection='exte
 let playing=false,playInterval=null;
 
 // ── LOGIN ────────────────────────────────────────────────────────────
+function doLogin(){
+  const user=document.getElementById('loginUser').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  if(user==='PFM_CP'&&pass==='HoyaSaxa'){
+    document.getElementById('loginOverlay').style.display='none';
+  } else {
+    const err=document.getElementById('loginError');
+    err.textContent='Incorrect username or password.';
+    document.getElementById('loginPass').value='';
+    setTimeout(()=>err.textContent='',3000);
+  }
+}
+
 // ── CAMPUS ──────────────────────────────────────────────────────────
 function setCampus(campus, btn){
   currentCampus=campus;
@@ -887,7 +888,6 @@ function setCampus(campus, btn){
   refreshMap();renderSidebar();updateStats();
 }
 
-// ── PM FILTER ────────────────────────────────────────────────────────
 function setPMFilter(val){
   currentPMFilter=val;
   refreshMap();renderSidebar();updateStats();
@@ -895,16 +895,15 @@ function setPMFilter(val){
 
 function populatePMDropdowns(){
   const opts=PM_NAMES.map(n=>`<option value="${n}">${n}</option>`).join('');
-  // Wizard
   const wizEl=document.getElementById('wiz-manager');
   if(wizEl) wizEl.innerHTML='<option value="">— Select Project Manager —</option>'+opts;
-  // Edit panel
   const editEl=document.getElementById('edit-manager');
   if(editEl) editEl.innerHTML='<option value="">— Select Project Manager —</option>'+opts;
-  // Top bar filter
   const filterEl=document.getElementById('pmFilter');
   if(filterEl) filterEl.innerHTML='<option value="">All PMs</option>'+opts;
 }
+
+// ── WIZARD PROJECT TYPE TOGGLE ────────────────────────────────────────
 function onWizProjTypeChange(){
   const val=document.getElementById('wiz-proj-type').value;
   document.getElementById('wiz-charter-status-row').style.display=(val==='Charter')?'':'none';
@@ -1068,24 +1067,18 @@ function buildPhaseSchedule(){
     const chk=document.getElementById('ps-'+ph+'-enabled');
     if(chk) prevEnabled[ph]=chk.checked;
   });
-  // Preserve existing milestone values
-  const prevSubstDate=document.getElementById('ps-subst-date')?.value||'';
-  const prevSubstTBD=document.getElementById('ps-subst-tbd')?.checked||false;
-  const prevOccDate=document.getElementById('ps-occ-date')?.value||'';
-  const prevOccTBD=document.getElementById('ps-occ-tbd')?.checked||false;
-
+  const prevOnHold=document.getElementById('ps-on_hold-yn')?.value||'no';
   const startPhase=document.getElementById('wiz-phase').value;
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx);
   const grid=document.getElementById('phaseScheduleGrid');
   if(!grid)return;
 
-  // Split phases: before/including closeout, then on_hold
-  const beforeOnHold=phases.filter(ph=>ph!=='on_hold');
+  const regularPhases=phases.filter(ph=>ph!=='on_hold');
   const hasOnHold=phases.includes('on_hold');
 
   let html='<div class="phase-sched">';
-  html+=beforeOnHold.map((ph,i)=>{
+  html+=regularPhases.map((ph,i)=>{
     const col=PHASES[ph].color;
     const isFirst=(i===0);
     const isEnabled=(ph in prevEnabled)?prevEnabled[ph]:true;
@@ -1119,56 +1112,17 @@ function buildPhaseSchedule(){
     </div>`;
   }).join('');
 
-  // ── Milestone dates ──────────────────────────────────────────────
-  html+=`
-  <div class="phase-sched-row" id="ps-milestones-row" style="background:#f0f4ff;border-color:#c8d8f0;">
-    <div class="phase-sched-label" style="margin-bottom:8px;">
-      <div class="phase-sched-dot" style="background:#2a6099"></div>
-      <span style="color:#2a6099;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Project Milestones</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div>
-        <label style="font-size:.62rem;color:#667;font-weight:600;display:block;margin-bottom:3px;">Est. Substantial Completion</label>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input type="date" id="ps-subst-date" value="${prevSubstDate}"
-            ${prevSubstTBD?'disabled style="background:#f8f9fb;color:#aaa;"':''}
-            style="flex:1;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;">
-          <label style="display:flex;align-items:center;gap:3px;font-size:.62rem;color:#667;white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="ps-subst-tbd" ${prevSubstTBD?'checked':''}
-              onchange="toggleMilestoneTBD('subst')"
-              style="accent-color:#2a6099;width:12px;height:12px;">TBD
-          </label>
-        </div>
-      </div>
-      <div>
-        <label style="font-size:.62rem;color:#667;font-weight:600;display:block;margin-bottom:3px;">Occupancy Date</label>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input type="date" id="ps-occ-date" value="${prevOccDate}"
-            ${prevOccTBD?'disabled style="background:#f8f9fb;color:#aaa;"':''}
-            style="flex:1;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;">
-          <label style="display:flex;align-items:center;gap:3px;font-size:.62rem;color:#667;white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="ps-occ-tbd" ${prevOccTBD?'checked':''}
-              onchange="toggleMilestoneTBD('occ')"
-              style="accent-color:#2a6099;width:12px;height:12px;">TBD
-          </label>
-        </div>
-      </div>
-    </div>
-  </div>`;
-
-  // ── On Hold — Yes/No toggle only ────────────────────────────────
+  // On Hold — yes/no only
   if(hasOnHold){
-    const ph='on_hold';
-    const col=PHASES[ph].color;
-    const prevOnHold=document.getElementById('ps-on_hold-yn')?.value||'no';
-    html+=`<div class="phase-sched-row" id="ps-${ph}-row">
+    const col=PHASES['on_hold'].color;
+    html+=`<div class="phase-sched-row" id="ps-on_hold-row">
       <div class="phase-sched-label" style="margin-bottom:0;">
         <div class="phase-sched-dot" style="background:${col}"></div>
-        <span style="color:${col}">${PHASE_LABELS[ph]}</span>
+        <span style="color:${col}">On Hold</span>
         <div class="yn-toggle" style="margin-left:auto;gap:5px;">
-          <button class="yn-btn${prevOnHold==='yes'?' active':''}" id="ps-on_hold-yes"
+          <button type="button" class="yn-btn${prevOnHold==='yes'?' active':''}" id="ps-on_hold-yes"
             onclick="setOnHoldYN('yes')" style="padding:3px 12px;font-size:.65rem;">Yes</button>
-          <button class="yn-btn${prevOnHold!=='yes'?' active':''}" id="ps-on_hold-no"
+          <button type="button" class="yn-btn${prevOnHold!=='yes'?' active':''}" id="ps-on_hold-no"
             onclick="setOnHoldYN('no')" style="padding:3px 12px;font-size:.65rem;">No</button>
         </div>
         <input type="hidden" id="ps-on_hold-yn" value="${prevOnHold}">
@@ -1176,39 +1130,20 @@ function buildPhaseSchedule(){
     </div>`;
   }
 
-  // ── Custom Timeframes ─────────────────────────────────────────────
-  const prevCustom=window._wizCustomTimeframes||[];
+  // Custom Timeframes
+  if(!window._wizCustomTimeframes) window._wizCustomTimeframes=[];
   html+=`<div id="custom-timeframes-container">`;
-  prevCustom.forEach((ct,i)=>{
-    html+=buildCustomTimeframeRow(i, ct.title, ct.start, ct.end);
+  window._wizCustomTimeframes.forEach((ct,i)=>{
+    html+=buildCustomTimeframeRow(i,ct.title||'',ct.start||'',ct.end||'');
   });
   html+=`</div>
   <button type="button" onclick="addCustomTimeframe()"
-    style="margin-top:8px;width:100%;padding:6px;background:#f0f4ff;border:1.5px dashed #c8d0e8;
+    style="margin-top:8px;width:100%;padding:6px;background:#f0faf8;border:1.5px dashed #2A9D8F66;
     border-radius:5px;font-family:'Source Sans 3',sans-serif;font-size:.7rem;font-weight:700;
     color:#2a6099;cursor:pointer;">+ Add Custom Timeframe</button>`;
 
   html+='</div>';
   grid.innerHTML=html;
-}
-
-function buildCustomTimeframeRow(i, title, start, end){
-  return `<div class="phase-sched-row" id="custom-tf-${i}" style="background:#f0faf8;border-color:#2A9D8F44;">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-      <div class="phase-sched-dot" style="background:#2A9D8F"></div>
-      <input type="text" id="custom-tf-${i}-title" value="${title||''}" placeholder="e.g. Permits, Zoning…"
-        style="flex:1;padding:4px 7px;border:1px solid #dde2ea;border-radius:4px;font-size:.72rem;
-        font-family:'Source Sans 3',sans-serif;color:var(--navy);">
-      <button onclick="removeCustomTimeframe(${i})" style="background:none;border:none;cursor:pointer;
-        color:#c0304a;font-size:.9rem;padding:0 2px;">×</button>
-    </div>
-    <div class="phase-sched-dates">
-      <div><label>Start Date</label>
-        <input type="date" id="custom-tf-${i}-start" value="${start||''}"></div>
-      <div><label>End Date</label>
-        <input type="date" id="custom-tf-${i}-end" value="${end||''}"></div>
-    </div>
-  </div>`;
 }
 
 function setOnHoldYN(val){
@@ -1218,26 +1153,39 @@ function setOnHoldYN(val){
   document.getElementById('ps-on_hold-no')?.classList.toggle('active',val==='no');
 }
 
+function buildCustomTimeframeRow(i,title,start,end){
+  return `<div class="phase-sched-row" id="custom-tf-${i}" style="background:#f0faf8;border-color:#2A9D8F44;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+      <div class="phase-sched-dot" style="background:#2A9D8F"></div>
+      <input type="text" id="custom-tf-${i}-title" value="${title}" placeholder="e.g. Permits, Zoning…"
+        style="flex:1;padding:4px 7px;border:1px solid #dde2ea;border-radius:4px;font-size:.72rem;
+        font-family:'Source Sans 3',sans-serif;color:var(--navy);">
+      <button type="button" onclick="removeCustomTimeframe(${i})"
+        style="background:none;border:none;cursor:pointer;color:#c0304a;font-size:.9rem;padding:0 2px;">×</button>
+    </div>
+    <div class="phase-sched-dates">
+      <div><label>Start Date</label>
+        <input type="date" id="custom-tf-${i}-start" value="${start}"></div>
+      <div><label>End Date</label>
+        <input type="date" id="custom-tf-${i}-end" value="${end}"></div>
+    </div>
+  </div>`;
+}
+
 function addCustomTimeframe(){
   if(!window._wizCustomTimeframes) window._wizCustomTimeframes=[];
+  const i=window._wizCustomTimeframes.length;
   window._wizCustomTimeframes.push({title:'',start:'',end:''});
-  // Re-render just the container
   const container=document.getElementById('custom-timeframes-container');
-  if(container){
-    const i=window._wizCustomTimeframes.length-1;
-    container.insertAdjacentHTML('beforeend', buildCustomTimeframeRow(i,'','',''));
-  }
+  if(container) container.insertAdjacentHTML('beforeend',buildCustomTimeframeRow(i,'','',''));
 }
 
 function removeCustomTimeframe(i){
   if(!window._wizCustomTimeframes) return;
   window._wizCustomTimeframes.splice(i,1);
-  // Rebuild all custom timeframe rows
   const container=document.getElementById('custom-timeframes-container');
-  if(container){
-    container.innerHTML=window._wizCustomTimeframes.map((ct,idx)=>
-      buildCustomTimeframeRow(idx,ct.title,ct.start,ct.end)).join('');
-  }
+  if(container) container.innerHTML=window._wizCustomTimeframes.map((ct,idx)=>
+    buildCustomTimeframeRow(idx,ct.title||'',ct.start||'',ct.end||'')).join('');
 }
 
 function readCustomTimeframes(){
@@ -1251,24 +1199,6 @@ function readCustomTimeframes(){
     i++;
   }
   return results;
-}
-
-function toggleMilestoneTBD(which){
-  const chk=document.getElementById('ps-'+which+'-tbd');
-  const inp=document.getElementById('ps-'+which+'-date');
-  if(chk.checked){inp.disabled=true;inp.style.cssText='background:#f8f9fb;color:#aaa;';}
-  else{inp.disabled=false;inp.style.cssText='';}
-}
-
-function readMilestoneDates(){
-  const substTBD=document.getElementById('ps-subst-tbd')?.checked||false;
-  const occTBD=document.getElementById('ps-occ-tbd')?.checked||false;
-  return {
-    substCompletionDate: substTBD?'TBD':(document.getElementById('ps-subst-date')?.value||''),
-    substCompletionTBD: substTBD,
-    occupancyDate: occTBD?'TBD':(document.getElementById('ps-occ-date')?.value||''),
-    occupancyTBD: occTBD
-  };
 }
 
 function toggleMainPhaseEnabled(ph){
@@ -1820,8 +1750,8 @@ function openWizard(){
   document.getElementById('wiz-name').value='';
   document.getElementById('wiz-manager').value='';
   document.getElementById('wiz-desc').value='';
-  document.getElementById('wiz-activity-summary').value='';
-  document.getElementById('wiz-activity-forecast').value='';
+  if(document.getElementById('wiz-activity-summary')) document.getElementById('wiz-activity-summary').value='';
+  if(document.getElementById('wiz-activity-forecast')) document.getElementById('wiz-activity-forecast').value='';
   document.getElementById('wiz-proj-type').value='';
   document.getElementById('wiz-charter-status-row').style.display='none';
   document.getElementById('wiz-type').value='';
@@ -1952,7 +1882,11 @@ function getShapeTimeline(prefix){
     if(s&&e) entries.push({phase:ph,start:s,end:e});
   });
   if(entries.length){
-    return {start:entries[0].start,end:entries[entries.length-1].end,phaseSchedule:entries};
+    return {
+      start:entries[0].start,
+      end:entries[entries.length-1].end,
+      phaseSchedule:entries
+    };
   }
   const sched=readPhaseSchedule();
   return {
@@ -1960,17 +1894,6 @@ function getShapeTimeline(prefix){
     end:sched.entries[sched.entries.length-1]?.end||'',
     phaseSchedule:sched.entries
   };
-}
-
-// Returns timeline for a specific shape by index within a section
-function getPerShapeTimeline(section, idx){
-  const startEl=document.getElementById(`shape-${section}-${idx}-start`);
-  const endEl=document.getElementById(`shape-${section}-${idx}-end`);
-  if(startEl&&endEl&&startEl.value&&endEl.value){
-    return {start:startEl.value, end:endEl.value, phaseSchedule:[{phase:'custom',start:startEl.value,end:endEl.value}]};
-  }
-  // Fall back to project phasing timeline
-  return getShapeTimeline(section==='stg'?'stg':section==='road'?'road':'ped');
 }
 
 function setStagingYN(val){
@@ -2108,43 +2031,7 @@ function onWizMapMove(e){}
 function updateDrawnItemsEl(arr,elId,section){
   const el=document.getElementById(elId);
   if(!el)return;
-  const isExtents=(section==='extents');
-  // Get default dates from project phase schedule for prefilling
-  function getDefaultDates(){
-    const sched=readPhaseSchedule();
-    return {
-      start:sched.entries[0]?.start||'',
-      end:sched.entries[sched.entries.length-1]?.end||''
-    };
-  }
-  el.innerHTML=arr.map((s,i)=>{
-    const shapeLabel=s.type==='pin'?'📍 Pin':s.type==='line'?'〰 Line':'⬡ Area';
-    if(isExtents){
-      return `<div class="drawn-tag">${shapeLabel} ${i+1}<button onclick="removeWizShape('${section}',${i})">×</button></div>`;
-    }
-    // For staging/road/ped — show per-shape start/end date pickers
-    const def=getDefaultDates();
-    const existStart=s.start||def.start;
-    const existEnd=s.end||def.end;
-    return `<div style="background:#fff;border:1px solid #e4e8ee;border-radius:6px;padding:8px 10px;margin-bottom:6px;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-        <span style="font-size:.68rem;font-weight:700;color:var(--navy);">${shapeLabel} ${i+1}</span>
-        <button onclick="removeWizShape('${section}',${i})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#c0304a;font-size:.85rem;">×</button>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-        <div>
-          <label style="font-size:.58rem;font-weight:700;color:#8a9ab0;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">Start Date</label>
-          <input type="date" id="shape-${section}-${i}-start" value="${existStart}"
-            style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.68rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);">
-        </div>
-        <div>
-          <label style="font-size:.58rem;font-weight:700;color:#8a9ab0;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">End Date</label>
-          <input type="date" id="shape-${section}-${i}-end" value="${existEnd}"
-            style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.68rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);">
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML=arr.map((s,i)=>`<div class="drawn-tag">${s.type==='pin'?'📍 Pin':s.type==='line'?'〰 Line':'⬡ Area'} ${i+1}<button onclick="removeWizShape('${section}',${i})">×</button></div>`).join('');
 }
 function removeWizShape(section,i){
   getSectionArr(section).splice(i,1);
@@ -2158,11 +2045,9 @@ function saveProject(){
   const name=document.getElementById('wiz-name').value.trim();
   const manager=document.getElementById('wiz-manager').value.trim();
   const desc=document.getElementById('wiz-desc').value.trim();
-  const activitySummary=document.getElementById('wiz-activity-summary').value.trim();
-  const activityForecast=document.getElementById('wiz-activity-forecast').value.trim();
+  const activitySummary=document.getElementById('wiz-activity-summary')?.value.trim()||'';
+  const activityForecast=document.getElementById('wiz-activity-forecast')?.value.trim()||'';
   const startingPhase=document.getElementById('wiz-phase').value;
-  const onHold=document.getElementById('ps-on_hold-yn')?.value==='yes';
-  const customTimeframes=readCustomTimeframes();
   const projType=document.getElementById('wiz-proj-type').value;
   const charterStatus=(projType==='Charter')?document.getElementById('wiz-charter-status').value:'';
   const category=document.getElementById('wiz-type').value;
@@ -2181,36 +2066,29 @@ function saveProject(){
   }
   const startVal=phaseSchedule.entries[0].start;
   const endVal=phaseSchedule.entries[phaseSchedule.entries.length-1].end;
-  const milestones=readMilestoneDates();
   const stagingTimeline=getShapeTimeline('stg');
   const roadTimeline=getShapeTimeline('road');
   const pedTimeline=getShapeTimeline('ped');
   const allShapes=[
     ...wizExtentShapes,
-    ...wizStagingShapes.map((s,i)=>{
-      const tl=getPerShapeTimeline('stg',i);
-      return {...s,isStagingArea:true,start:tl.start,end:tl.end,phaseSchedule:tl.phaseSchedule||[]};
-    }),
-    ...wizRoadShapes.map((s,i)=>{
-      const tl=getPerShapeTimeline('road',i);
-      return {...s,isRoadClosure:true,start:tl.start,end:tl.end,phaseSchedule:tl.phaseSchedule||[]};
-    }),
-    ...wizPedShapes.map((s,i)=>{
-      const tl=getPerShapeTimeline('ped',i);
-      return {...s,isPedAccess:true,start:tl.start,end:tl.end,phaseSchedule:tl.phaseSchedule||[]};
-    })
+    ...wizStagingShapes.map(s=>({...s,isStagingArea:true,
+      start:stagingTimeline.start,end:stagingTimeline.end,
+      phaseSchedule:stagingTimeline.phaseSchedule||[]})),
+    ...wizRoadShapes.map(s=>({...s,isRoadClosure:true,
+      start:roadTimeline.start,end:roadTimeline.end,
+      phaseSchedule:roadTimeline.phaseSchedule||[]})),
+    ...wizPedShapes.map(s=>({...s,isPedAccess:true,
+      start:pedTimeline.start,end:pedTimeline.end,
+      phaseSchedule:pedTimeline.phaseSchedule||[]}))
   ];
+  const onHold=document.getElementById('ps-on_hold-yn')?.value==='yes';
+  const customTimeframes=readCustomTimeframes();
   const p={id:nextId++,name,manager,
     projType,charterStatus,
     type:category,
     campus:currentCampus,
-    phase:startingPhase,start:startVal,end:endVal,
-    desc,activitySummary,activityForecast,
+    phase:startingPhase,start:startVal,end:endVal,desc,activitySummary,activityForecast,
     onHold,customTimeframes,
-    substCompletionDate:milestones.substCompletionDate,
-    substCompletionTBD:milestones.substCompletionTBD,
-    occupancyDate:milestones.occupancyDate,
-    occupancyTBD:milestones.occupancyTBD,
     phaseSchedule:phaseSchedule.entries,shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
@@ -2240,8 +2118,8 @@ function openEditExtents(){
   document.getElementById('edit-name').value    = p.name    || '';
   document.getElementById('edit-manager').value = p.manager || '';
   document.getElementById('edit-desc').value    = p.desc    || '';
-  document.getElementById('edit-activity-summary').value  = p.activitySummary  || '';
-  document.getElementById('edit-activity-forecast').value = p.activityForecast || '';
+  if(document.getElementById('edit-activity-summary')) document.getElementById('edit-activity-summary').value=p.activitySummary||'';
+  if(document.getElementById('edit-activity-forecast')) document.getElementById('edit-activity-forecast').value=p.activityForecast||'';
   document.getElementById('edit-start').value   = p.start   || '';
   document.getElementById('edit-end').value     = p.end     || '';
   // Project Type + Charter Status
@@ -2274,8 +2152,7 @@ function renderEditShapes(){
     else if(s.isPedAccess) ped.push({s,i});
     else extents.push({s,i});
   });
-
-  function buildExtentList(arr, emptyMsg){
+  function buildList(arr, emptyMsg){
     if(!arr.length) return `<p style="font-size:.68rem;color:#bbb;padding:3px 0">${emptyMsg}</p>`;
     return arr.map(({s,i})=>`<div class="shape-row">
       <span class="shape-lbl">${s.type==='pin'?'📍 Pin':s.type==='line'?'〰 Line':'⬡ Area'} ${i+1}</span>
@@ -2285,37 +2162,11 @@ function renderEditShapes(){
       </div>
     </div>`).join('');
   }
-
-  function buildShapeList(arr, emptyMsg){
-    if(!arr.length) return `<p style="font-size:.68rem;color:#bbb;padding:3px 0">${emptyMsg}</p>`;
-    return arr.map(({s,i})=>`<div style="background:#fff;border:1px solid #e4e8ee;border-radius:6px;padding:8px 10px;margin-bottom:6px;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-        <span style="font-size:.68rem;font-weight:700;color:var(--navy);">${s.type==='pin'?'📍 Pin':s.type==='line'?'〰 Line':'⬡ Area'} ${i+1}</span>
-        <div style="display:flex;gap:5px;margin-left:auto;">
-          ${(s.type==='polygon'||s.type==='line')?`<button class="btn-del-shape" style="background:#e8f0ff;color:var(--navy);" onclick="editShapeVertices(${i})">✏️ Edit</button>`:''}
-          <button class="btn-del-shape" onclick="deleteShape(${i})">🗑 Delete</button>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-        <div>
-          <label style="font-size:.58rem;font-weight:700;color:#8a9ab0;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">Start Date</label>
-          <input type="date" id="edit-shape-${i}-start" value="${s.start||p.start||''}"
-            style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.68rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);">
-        </div>
-        <div>
-          <label style="font-size:.58rem;font-weight:700;color:#8a9ab0;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">End Date</label>
-          <input type="date" id="edit-shape-${i}-end" value="${s.end||p.end||''}"
-            style="width:100%;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.68rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);">
-        </div>
-      </div>
-    </div>`).join('');
-  }
-
-  document.getElementById('editExtentsList').innerHTML = buildExtentList(extents,'No extents yet');
-  document.getElementById('editStagingList').innerHTML  = buildShapeList(staging,'No staging areas yet');
-  document.getElementById('editRoadList').innerHTML     = buildShapeList(road,'No road closures yet');
+  document.getElementById('editExtentsList').innerHTML = buildList(extents,'No extents yet');
+  document.getElementById('editStagingList').innerHTML  = buildList(staging,'No staging areas yet');
+  document.getElementById('editRoadList').innerHTML     = buildList(road,'No road closures yet');
   const pedEl=document.getElementById('editPedList');
-  if(pedEl) pedEl.innerHTML=buildShapeList(ped,'No pedestrian access lines yet');
+  if(pedEl) pedEl.innerHTML=buildList(ped,'No pedestrian access lines yet');
 }
 
 function deleteShape(i){
@@ -2529,11 +2380,12 @@ function buildEditPhaseSchedule(p){
   const startPhase=p.phase||'programming';
   const startIdx=PHASE_ORDER.indexOf(startPhase);
   const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
-  const beforeOnHold=phases.filter(ph=>ph!=='on_hold');
+  const regularPhases=phases.filter(ph=>ph!=='on_hold');
   const hasOnHold=phases.includes('on_hold');
+  const onHoldVal=p.onHold?'yes':'no';
 
   let html='<div class="phase-sched">';
-  html+=beforeOnHold.map(ph=>{
+  html+=regularPhases.map(ph=>{
     const entry=schedule.find(e=>e.phase===ph)||{};
     const col=PHASES[ph].color;
     return `<div class="phase-sched-row" style="border-color:${col}22;">
@@ -2550,56 +2402,16 @@ function buildEditPhaseSchedule(p){
     </div>`;
   }).join('');
 
-  // Milestone fields
-  const substTBD=p.substCompletionTBD||false;
-  const occTBD=p.occupancyTBD||false;
-  html+=`<div class="phase-sched-row" style="background:#f0f4ff;border-color:#c8d8f0;">
-    <div class="phase-sched-label" style="margin-bottom:8px;">
-      <div class="phase-sched-dot" style="background:#2a6099"></div>
-      <span style="color:#2a6099;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Project Milestones</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div>
-        <label style="font-size:.62rem;color:#667;font-weight:600;display:block;margin-bottom:3px;">Est. Substantial Completion</label>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input type="date" id="eps-subst-date" value="${substTBD?'':(p.substCompletionDate||'')}"
-            ${substTBD?'disabled style="background:#f8f9fb;color:#aaa;"':''}
-            style="flex:1;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;">
-          <label style="display:flex;align-items:center;gap:3px;font-size:.62rem;color:#667;white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="eps-subst-tbd" ${substTBD?'checked':''}
-              onchange="toggleEditMilestoneTBD('subst')"
-              style="accent-color:#2a6099;width:12px;height:12px;">TBD
-          </label>
-        </div>
-      </div>
-      <div>
-        <label style="font-size:.62rem;color:#667;font-weight:600;display:block;margin-bottom:3px;">Occupancy Date</label>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input type="date" id="eps-occ-date" value="${occTBD?'':(p.occupancyDate||'')}"
-            ${occTBD?'disabled style="background:#f8f9fb;color:#aaa;"':''}
-            style="flex:1;padding:4px 6px;border:1px solid #dde2ea;border-radius:4px;font-size:.7rem;font-family:'Source Sans 3',sans-serif;">
-          <label style="display:flex;align-items:center;gap:3px;font-size:.62rem;color:#667;white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="eps-occ-tbd" ${occTBD?'checked':''}
-              onchange="toggleEditMilestoneTBD('occ')"
-              style="accent-color:#2a6099;width:12px;height:12px;">TBD
-          </label>
-        </div>
-      </div>
-    </div>
-  </div>`;
-
   if(hasOnHold){
-    const ph='on_hold';
-    const col=PHASES[ph].color;
-    const onHoldVal=p.onHold?'yes':'no';
-    html+=`<div class="phase-sched-row" id="eps-${ph}-row">
+    const col=PHASES['on_hold'].color;
+    html+=`<div class="phase-sched-row" id="eps-on_hold-row">
       <div class="phase-sched-label" style="margin-bottom:0;">
         <div class="phase-sched-dot" style="background:${col}"></div>
-        <span style="color:${col}">${PHASE_LABELS[ph]}</span>
+        <span style="color:${col}">On Hold</span>
         <div class="yn-toggle" style="margin-left:auto;gap:5px;">
-          <button class="yn-btn${onHoldVal==='yes'?' active':''}" id="eps-on_hold-yes"
+          <button type="button" class="yn-btn${onHoldVal==='yes'?' active':''}" id="eps-on_hold-yes"
             onclick="setEditOnHoldYN('yes')" style="padding:3px 12px;font-size:.65rem;">Yes</button>
-          <button class="yn-btn${onHoldVal!=='yes'?' active':''}" id="eps-on_hold-no"
+          <button type="button" class="yn-btn${onHoldVal!=='yes'?' active':''}" id="eps-on_hold-no"
             onclick="setEditOnHoldYN('no')" style="padding:3px 12px;font-size:.65rem;">No</button>
         </div>
         <input type="hidden" id="eps-on_hold-yn" value="${onHoldVal}">
@@ -2611,22 +2423,44 @@ function buildEditPhaseSchedule(p){
   const customTFs=p.customTimeframes||[];
   html+=`<div id="edit-custom-timeframes-container">`;
   customTFs.forEach((ct,i)=>{
-    html+=buildEditCustomTimeframeRow(i,ct.title,ct.start,ct.end);
+    html+=`<div class="phase-sched-row" id="edit-custom-tf-${i}" style="background:#f0faf8;border-color:#2A9D8F44;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <div class="phase-sched-dot" style="background:#2A9D8F"></div>
+        <input type="text" id="edit-custom-tf-${i}-title" value="${ct.title||''}" placeholder="e.g. Permits, Zoning…"
+          style="flex:1;padding:4px 7px;border:1px solid #dde2ea;border-radius:4px;font-size:.72rem;
+          font-family:'Source Sans 3',sans-serif;color:var(--navy);">
+        <button type="button" onclick="removeEditCustomTF(${i})"
+          style="background:none;border:none;cursor:pointer;color:#c0304a;font-size:.9rem;">×</button>
+      </div>
+      <div class="phase-sched-dates">
+        <div><label>Start Date</label>
+          <input type="date" id="edit-custom-tf-${i}-start" value="${ct.start||''}"></div>
+        <div><label>End Date</label>
+          <input type="date" id="edit-custom-tf-${i}-end" value="${ct.end||''}"></div>
+      </div>
+    </div>`;
   });
   html+=`</div>
-  <button type="button" onclick="addEditCustomTimeframe()"
+  <button type="button" onclick="addEditCustomTF()"
     style="margin-top:8px;width:100%;padding:6px;background:#f0faf8;border:1.5px dashed #2A9D8F66;
     border-radius:5px;font-family:'Source Sans 3',sans-serif;font-size:.7rem;font-weight:700;
     color:#2a6099;cursor:pointer;">+ Add Custom Timeframe</button>`;
+
   html+='</div>';
   container.innerHTML=html;
 }
 
-function toggleEditMilestoneTBD(which){
-  const chk=document.getElementById('eps-'+which+'-tbd');
-  const inp=document.getElementById('eps-'+which+'-date');
-  if(chk.checked){inp.disabled=true;inp.style.cssText='background:#f8f9fb;color:#aaa;';}
-  else{inp.disabled=false;inp.style.cssText='';}
+function readEditPhaseSchedule(p){
+  const startPhase=p.phase||'programming';
+  const startIdx=PHASE_ORDER.indexOf(startPhase);
+  const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0).filter(ph=>ph!=='on_hold');
+  const entries=[];
+  phases.forEach(ph=>{
+    const s=document.getElementById('eps-'+ph+'-start')?.value;
+    const e=document.getElementById('eps-'+ph+'-end')?.value;
+    if(s&&e) entries.push({phase:ph,start:s,end:e});
+  });
+  return entries;
 }
 
 function setEditOnHoldYN(val){
@@ -2636,47 +2470,26 @@ function setEditOnHoldYN(val){
   document.getElementById('eps-on_hold-no')?.classList.toggle('active',val==='no');
 }
 
-function buildEditCustomTimeframeRow(i,title,start,end){
-  return `<div class="phase-sched-row" id="edit-custom-tf-${i}" style="background:#f0faf8;border-color:#2A9D8F44;">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-      <div class="phase-sched-dot" style="background:#2A9D8F"></div>
-      <input type="text" id="edit-custom-tf-${i}-title" value="${title||''}" placeholder="e.g. Permits, Zoning…"
-        style="flex:1;padding:4px 7px;border:1px solid #dde2ea;border-radius:4px;font-size:.72rem;
-        font-family:'Source Sans 3',sans-serif;color:var(--navy);">
-      <button onclick="removeEditCustomTimeframe(${i})" style="background:none;border:none;cursor:pointer;
-        color:#c0304a;font-size:.9rem;padding:0 2px;">×</button>
-    </div>
-    <div class="phase-sched-dates">
-      <div><label>Start Date</label>
-        <input type="date" id="edit-custom-tf-${i}-start" value="${start||''}"></div>
-      <div><label>End Date</label>
-        <input type="date" id="edit-custom-tf-${i}-end" value="${end||''}"></div>
-    </div>
-  </div>`;
-}
-
-function addEditCustomTimeframe(){
+function addEditCustomTF(){
   const container=document.getElementById('edit-custom-timeframes-container');
   if(!container) return;
   const i=container.children.length;
-  container.insertAdjacentHTML('beforeend', buildEditCustomTimeframeRow(i,'','',''));
+  container.insertAdjacentHTML('beforeend',`<div class="phase-sched-row" id="edit-custom-tf-${i}" style="background:#f0faf8;border-color:#2A9D8F44;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+      <div class="phase-sched-dot" style="background:#2A9D8F"></div>
+      <input type="text" id="edit-custom-tf-${i}-title" value="" placeholder="e.g. Permits, Zoning…"
+        style="flex:1;padding:4px 7px;border:1px solid #dde2ea;border-radius:4px;font-size:.72rem;font-family:'Source Sans 3',sans-serif;color:var(--navy);">
+      <button type="button" onclick="removeEditCustomTF(${i})" style="background:none;border:none;cursor:pointer;color:#c0304a;font-size:.9rem;">×</button>
+    </div>
+    <div class="phase-sched-dates">
+      <div><label>Start Date</label><input type="date" id="edit-custom-tf-${i}-start" value=""></div>
+      <div><label>End Date</label><input type="date" id="edit-custom-tf-${i}-end" value=""></div>
+    </div>
+  </div>`);
 }
 
-function removeEditCustomTimeframe(i){
-  const el=document.getElementById(`edit-custom-tf-${i}`);
-  if(el) el.remove();
-  // Re-index remaining rows
-  const container=document.getElementById('edit-custom-timeframes-container');
-  if(!container) return;
-  Array.from(container.children).forEach((row,idx)=>{
-    row.id=`edit-custom-tf-${idx}`;
-    ['title','start','end'].forEach(f=>{
-      const inp=row.querySelector(`[id$="-${f}"]`);
-      if(inp) inp.id=`edit-custom-tf-${idx}-${f}`;
-    });
-    const btn=row.querySelector('button');
-    if(btn) btn.setAttribute('onclick',`removeEditCustomTimeframe(${idx})`);
-  });
+function removeEditCustomTF(i){
+  document.getElementById(`edit-custom-tf-${i}`)?.remove();
 }
 
 function readEditCustomTimeframes(){
@@ -2684,25 +2497,12 @@ function readEditCustomTimeframes(){
   const container=document.getElementById('edit-custom-timeframes-container');
   if(!container) return results;
   Array.from(container.children).forEach((row,i)=>{
-    const title=document.getElementById(`edit-custom-tf-${i}-title`)?.value.trim()||'';
-    const start=document.getElementById(`edit-custom-tf-${i}-start`)?.value||'';
-    const end=document.getElementById(`edit-custom-tf-${i}-end`)?.value||'';
+    const title=row.querySelector('[id$="-title"]')?.value.trim()||'';
+    const start=row.querySelector('[id$="-start"]')?.value||'';
+    const end=row.querySelector('[id$="-end"]')?.value||'';
     if(title) results.push({title,start,end});
   });
   return results;
-}
-
-function readEditPhaseSchedule(p){
-  const startPhase=p.phase||'programming';
-  const startIdx=PHASE_ORDER.indexOf(startPhase);
-  const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
-  const entries=[];
-  phases.forEach(ph=>{
-    const s=document.getElementById('eps-'+ph+'-start')?.value;
-    const e=document.getElementById('eps-'+ph+'-end')?.value;
-    if(s&&e) entries.push({phase:ph,start:s,end:e});
-  });
-  return entries;
 }
 
 function buildEditShapeTimeline(p, shapeType, gridId){
@@ -2781,14 +2581,14 @@ function closeEditPanel(save){
       const newName=document.getElementById('edit-name').value.trim();
       if(!newName){alert('Project name cannot be empty.');return;}
       p.name    = newName;
-      p.manager = document.getElementById('edit-manager').value;
+      p.manager = document.getElementById('edit-manager').value.trim();
       p.projType= document.getElementById('edit-proj-type').value;
       p.charterStatus=(p.projType==='Charter')?document.getElementById('edit-charter-status').value:'';
       p.type    = document.getElementById('edit-type').value;
       p.phase   = document.getElementById('edit-phase').value;
       p.desc    = document.getElementById('edit-desc').value.trim();
-      p.activitySummary  = document.getElementById('edit-activity-summary').value.trim();
-      p.activityForecast = document.getElementById('edit-activity-forecast').value.trim();
+      p.activitySummary  = document.getElementById('edit-activity-summary')?.value.trim()||'';
+      p.activityForecast = document.getElementById('edit-activity-forecast')?.value.trim()||'';
       p.onHold  = document.getElementById('eps-on_hold-yn')?.value==='yes';
       p.customTimeframes = readEditCustomTimeframes();
       const sched=readEditPhaseSchedule(p);
@@ -2800,24 +2600,21 @@ function closeEditPanel(save){
         p.start = document.getElementById('edit-start').value;
         p.end   = document.getElementById('edit-end').value;
       }
-      // Save milestone dates
-      const substTBD=document.getElementById('eps-subst-tbd')?.checked||false;
-      const occTBD=document.getElementById('eps-occ-tbd')?.checked||false;
-      p.substCompletionDate=substTBD?'TBD':(document.getElementById('eps-subst-date')?.value||'');
-      p.substCompletionTBD=substTBD;
-      p.occupancyDate=occTBD?'TBD':(document.getElementById('eps-occ-date')?.value||'');
-      p.occupancyTBD=occTBD;
-      // Save per-shape start/end dates from the edit panel inputs
-      p.shapes.forEach((s,i)=>{
-        if(s.isStagingArea||s.isRoadClosure||s.isPedAccess){
-          const startEl=document.getElementById(`edit-shape-${i}-start`);
-          const endEl=document.getElementById(`edit-shape-${i}-end`);
-          if(startEl&&startEl.value) s.start=startEl.value;
-          if(endEl&&endEl.value) s.end=endEl.value;
-          // Update phaseSchedule to reflect new dates
-          if(s.start&&s.end){
-            s.phaseSchedule=[{phase:s.isStagingArea?'staging':s.isRoadClosure?'road':'ped',start:s.start,end:s.end}];
-          }
+      const stgSched=readEditShapeTimeline('edit-stg-phase-grid',p);
+      const roadSched=readEditShapeTimeline('edit-road-phase-grid',p);
+      const pedSched=readEditShapeTimeline('edit-ped-phase-grid',p);
+      p.shapes.forEach(s=>{
+        if(s.isStagingArea&&stgSched.length){
+          s.phaseSchedule=stgSched;
+          s.start=stgSched[0].start;s.end=stgSched[stgSched.length-1].end;
+        }
+        if(s.isRoadClosure&&roadSched.length){
+          s.phaseSchedule=roadSched;
+          s.start=roadSched[0].start;s.end=roadSched[roadSched.length-1].end;
+        }
+        if(s.isPedAccess&&pedSched.length){
+          s.phaseSchedule=pedSched;
+          s.start=pedSched[0].start;s.end=pedSched[pedSched.length-1].end;
         }
       });
       refreshMap();renderSidebar();updateStats();buildMiniLegend();
@@ -3294,19 +3091,23 @@ function drawGantt(p){
   const schedule = p.phaseSchedule;
   if(!schedule||!schedule.length) return null;
 
-  const customTFs = (p.customTimeframes||[]).filter(ct=>ct.title&&ct.start&&ct.end);
-  const allRows = [...schedule, ...customTFs.map(ct=>({phase:'custom',label:ct.title,start:ct.start,end:ct.end,isCustom:true}))];
+  // Merge phase schedule + custom timeframes into one row list
+  const customTFs=(p.customTimeframes||[]).filter(ct=>ct.title&&ct.start&&ct.end);
+  const allRows=[
+    ...schedule,
+    ...customTFs.map(ct=>({phase:'custom',label:ct.title,start:ct.start,end:ct.end,isCustom:true}))
+  ];
 
   // ── Layout constants ─────────────────────────────────────────────
-  const DPR       = 2;
+  const DPR       = 2;          // hi-dpi
   const FONT      = 'Source Sans 3, Arial, sans-serif';
-  const LEFT_PAD  = 16;
+  const LEFT_PAD  = 16;         // left margin
   const RIGHT_PAD = 16;
-  const TOP_PAD   = 56;
-  const HEADER_H  = 32;
-  const ROW_H     = 44;
+  const TOP_PAD   = 56;         // space for title + timeline header
+  const HEADER_H  = 32;         // timeline header row height
+  const ROW_H     = 44;         // height per phase row
   const ROW_GAP   = 8;
-  const BOTTOM_PAD= 48;
+  const BOTTOM_PAD= 32;
   const MIN_BAR_W = 4;
   const RADIUS    = 5;
 
@@ -3314,7 +3115,7 @@ function drawGantt(p){
   let minDate = new Date(allRows[0].start);
   let maxDate = new Date(allRows[0].end);
   allRows.forEach(row=>{
-    const s=new Date(row.start), e=new Date(row.end);
+    const s=new Date(row.start),e=new Date(row.end);
     if(s<minDate) minDate=s;
     if(e>maxDate) maxDate=e;
   });
@@ -3322,6 +3123,8 @@ function drawGantt(p){
   maxDate=new Date(maxDate); maxDate.setDate(1); maxDate.setMonth(maxDate.getMonth()+1);
 
   const totalDays = (maxDate - minDate) / 86400000;
+
+  // ── Canvas width ─────────────────────────────────────────────────
   const DAY_W = Math.min(Math.max(Math.round(900/totalDays), 6), 18);
   const CHART_W = Math.max(900, totalDays * DAY_W);
   const CANVAS_W = LEFT_PAD + CHART_W + RIGHT_PAD;
@@ -3335,15 +3138,17 @@ function drawGantt(p){
   const ctx = c.getContext('2d');
   ctx.scale(DPR, DPR);
 
+  // ── Background ───────────────────────────────────────────────────
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
+  // ── Helper: date → x ─────────────────────────────────────────────
   function dateToX(d){
     const days = (new Date(d) - minDate) / 86400000;
     return LEFT_PAD + (days / totalDays) * CHART_W;
   }
 
-  // Title
+  // ── Title ────────────────────────────────────────────────────────
   ctx.fillStyle = '#041E42';
   ctx.font = `700 15px ${FONT}`;
   ctx.fillText(p.name, LEFT_PAD, 22);
@@ -3351,33 +3156,49 @@ function drawGantt(p){
   ctx.font = `400 10px ${FONT}`;
   ctx.fillText(`${p.start} → ${p.end}  ·  ${p.manager||''}  ·  ${p.type||''}`, LEFT_PAD, 38);
 
-  // Timeline header
+  // ── Timeline header ──────────────────────────────────────────────
   const headerY = TOP_PAD;
   ctx.fillStyle = '#f4f6f9';
   ctx.fillRect(LEFT_PAD, headerY, CHART_W, HEADER_H);
-  ctx.strokeStyle = '#dde2ea'; ctx.lineWidth=1;
+  ctx.strokeStyle = '#dde2ea';
+  ctx.lineWidth = 1;
   ctx.strokeRect(LEFT_PAD, headerY, CHART_W, HEADER_H);
 
+  // Month ticks
   const cursor = new Date(minDate);
   while(cursor <= maxDate){
     const x = dateToX(cursor);
     const label = MONTHS[cursor.getMonth()]+' \''+String(cursor.getFullYear()).slice(2);
-    ctx.strokeStyle='#e8eaee'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(x,headerY+HEADER_H); ctx.lineTo(x,CANVAS_H-BOTTOM_PAD); ctx.stroke();
+    // Vertical grid line
+    ctx.strokeStyle = '#e8eaee';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(x, headerY+HEADER_H); ctx.lineTo(x, CANVAS_H-BOTTOM_PAD); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle='#445566'; ctx.font=`600 9.5px ${FONT}`;
+    // Month label
+    ctx.fillStyle = '#445566';
+    ctx.font = `600 9.5px ${FONT}`;
     ctx.fillText(label, x+4, headerY+HEADER_H/2+4);
     cursor.setMonth(cursor.getMonth()+1);
   }
 
-  ctx.fillStyle='#041E42'; ctx.font=`700 8.5px ${FONT}`;
+  // Start / Finish labels
+  ctx.fillStyle = '#041E42';
+  ctx.font = `700 8.5px ${FONT}`;
   ctx.fillText('Start', LEFT_PAD, headerY+10);
-  ctx.textAlign='right'; ctx.fillText('Finish', LEFT_PAD+CHART_W, headerY+10); ctx.textAlign='left';
-  ctx.fillStyle='#8a96a3'; ctx.font=`400 8px ${FONT}`;
-  ctx.fillText(p.start, LEFT_PAD, headerY+22);
-  ctx.textAlign='right'; ctx.fillText(p.end, LEFT_PAD+CHART_W, headerY+22); ctx.textAlign='left';
+  ctx.textAlign='right';
+  ctx.fillText('Finish', LEFT_PAD+CHART_W, headerY+10);
+  ctx.textAlign='left';
 
-  // All rows (phase + custom)
+  // Start / finish date
+  ctx.fillStyle='#8a96a3';
+  ctx.font=`400 8px ${FONT}`;
+  ctx.fillText(p.start, LEFT_PAD, headerY+22);
+  ctx.textAlign='right';
+  ctx.fillText(p.end, LEFT_PAD+CHART_W, headerY+22);
+  ctx.textAlign='left';
+
+  // ── Phase + custom rows ──────────────────────────────────────────
   allRows.forEach((entry, i)=>{
     const isCustom=!!entry.isCustom;
     const barColor = isCustom ? '#2A9D8F' : (PHASES[entry.phase]?.color||'#8a96a3');
@@ -3398,39 +3219,36 @@ function drawGantt(p){
     ctx.fill();
     ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
 
-    ctx.fillStyle='#ffffff'; ctx.font=`700 10px ${FONT}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 10px ${FONT}`;
     ctx.save();
     ctx.rect(x1+2, y, barW-4, barH); ctx.clip();
     ctx.fillText(rowLabel, x1+10, y+barH/2-2);
-    ctx.font=`400 8.5px ${FONT}`; ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.font = `400 8.5px ${FONT}`;
+    ctx.fillStyle='rgba(255,255,255,0.85)';
     ctx.fillText(`${entry.start.slice(5)} – ${entry.end.slice(5)}`, x1+10, y+barH/2+9);
     ctx.restore();
 
-    ctx.strokeStyle=barColor; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(x1,y+2); ctx.lineTo(x1,y+barH-2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x2,y+2); ctx.lineTo(x2,y+barH-2); ctx.stroke();
+    ctx.strokeStyle = barColor; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x1, y+2); ctx.lineTo(x1, y+barH-2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2, y+2); ctx.lineTo(x2, y+barH-2); ctx.stroke();
   });
 
-  // Bottom border
+  // ── Bottom border line ───────────────────────────────────────────
   const bottomY = TOP_PAD + HEADER_H + allRows.length*(ROW_H+ROW_GAP) + ROW_GAP/2;
   ctx.strokeStyle='#dde2ea'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(LEFT_PAD,bottomY); ctx.lineTo(LEFT_PAD+CHART_W,bottomY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(LEFT_PAD, bottomY); ctx.lineTo(LEFT_PAD+CHART_W, bottomY); ctx.stroke();
 
-  // Milestone diamond
+  // ── Milestone diamond at end ─────────────────────────────────────
   const endX = dateToX(p.end);
-  const diamY = bottomY + 16;
-  ctx.fillStyle='#041E42';
+  const diamY = bottomY + 14;
+  ctx.fillStyle = '#041E42';
   ctx.beginPath();
-  ctx.moveTo(endX,diamY-7); ctx.lineTo(endX+7,diamY);
-  ctx.lineTo(endX,diamY+7); ctx.lineTo(endX-7,diamY);
+  ctx.moveTo(endX, diamY-7);
+  ctx.lineTo(endX+7, diamY);
+  ctx.lineTo(endX, diamY+7);
+  ctx.lineTo(endX-7, diamY);
   ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#445566'; ctx.font=`400 8.5px ${FONT}`;
-  ctx.textAlign='center';
-  ctx.fillText('Project End · '+p.end, endX, diamY+16);
-  ctx.textAlign='left';
-
-  return c;
-}
   ctx.fillStyle='#445566'; ctx.font=`400 8.5px ${FONT}`;
   ctx.textAlign='center';
   ctx.fillText('Project End · '+p.end, endX, diamY+18);
