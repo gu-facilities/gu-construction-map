@@ -1131,6 +1131,20 @@ function buildPhaseSchedule(){
     </div>`;
   }
 
+  // Occupancy Date
+  const prevOccDate=window._wizOccupancyDate||'';
+  html+=`<div class="phase-sched-row" style="background:#f4f6ff;border-color:#c8d0e844;">
+    <div class="phase-sched-label" style="margin-bottom:6px;">
+      <div class="phase-sched-dot" style="background:#2a6099"></div>
+      <span style="color:#2a6099;font-size:.68rem;font-weight:700;">Occupancy Date</span>
+    </div>
+    <div class="phase-sched-dates">
+      <div><label>Date</label>
+        <input type="date" id="ps-occupancy-date" value="${prevOccDate}"></div>
+      <div></div>
+    </div>
+  </div>`;
+
   // Custom Timeframes
   if(!window._wizCustomTimeframes) window._wizCustomTimeframes=[];
   html+=`<div id="custom-timeframes-container">`;
@@ -1758,6 +1772,7 @@ function openWizard(){
   document.getElementById('wiz-type').value='';
   document.getElementById('wiz-phase').value='programming';
   window._wizCustomTimeframes=[];
+  window._wizOccupancyDate='';
   buildPhaseSchedule();
   populatePMDropdowns();
   ['stg','road','ped'].forEach(t=>{
@@ -2083,13 +2098,15 @@ function saveProject(){
       phaseSchedule:pedTimeline.phaseSchedule||[]}))
   ];
   const onHold=document.getElementById('ps-on_hold-yn')?.value==='yes';
+  const occupancyDate=document.getElementById('ps-occupancy-date')?.value||'';
+  window._wizOccupancyDate=occupancyDate;
   const customTimeframes=readCustomTimeframes();
   const p={id:nextId++,name,manager,
     projType,charterStatus,
     type:category,
     campus:currentCampus,
     phase:startingPhase,start:startVal,end:endVal,desc,activitySummary,activityForecast,
-    onHold,customTimeframes,
+    onHold,customTimeframes,occupancyDate,
     phaseSchedule:phaseSchedule.entries,shapes:allShapes};
   projects.push(p);
   closeWizard();refreshMap();renderSidebar();updateStats();buildMiniLegend();
@@ -2121,6 +2138,7 @@ function openEditExtents(){
   document.getElementById('edit-desc').value    = p.desc    || '';
   if(document.getElementById('edit-activity-summary')) document.getElementById('edit-activity-summary').value=p.activitySummary||'';
   if(document.getElementById('edit-activity-forecast')) document.getElementById('edit-activity-forecast').value=p.activityForecast||'';
+  // occupancyDate populated via buildEditPhaseSchedule
   document.getElementById('edit-start').value   = p.start   || '';
   document.getElementById('edit-end').value     = p.end     || '';
   // Project Type + Charter Status
@@ -2418,6 +2436,20 @@ function buildEditPhaseSchedule(p){
     </div>`;
   }
 
+  // Occupancy Date
+  const occDate=p.occupancyDate||'';
+  html+=`<div class="phase-sched-row" style="background:#f4f6ff;border-color:#c8d0e844;">
+    <div class="phase-sched-label" style="margin-bottom:6px;">
+      <div class="phase-sched-dot" style="background:#2a6099"></div>
+      <span style="color:#2a6099;font-size:.68rem;font-weight:700;">Occupancy Date</span>
+    </div>
+    <div class="phase-sched-dates">
+      <div><label>Date</label>
+        <input type="date" id="eps-occupancy-date" value="${occDate}"></div>
+      <div></div>
+    </div>
+  </div>`;
+
   // Custom Timeframes
   const customTFs=p.customTimeframes||[];
   html+=`<div id="edit-custom-timeframes-container">`;
@@ -2591,6 +2623,7 @@ function closeEditPanel(save){
       p.activitySummary  = document.getElementById('edit-activity-summary')?.value.trim()||'';
       p.activityForecast = document.getElementById('edit-activity-forecast')?.value.trim()||'';
       p.onHold  = document.getElementById('eps-on_hold-yn')?.value==='yes';
+      p.occupancyDate = document.getElementById('eps-occupancy-date')?.value||'';
       p.customTimeframes = readEditCustomTimeframes();
       const sched=readEditPhaseSchedule(p);
       if(sched.length){
