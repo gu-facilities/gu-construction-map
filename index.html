@@ -3160,10 +3160,14 @@ function drawGantt(p){
   const LABEL_W=190,LEFT_PAD=24,RIGHT_PAD=48;
   const TOP_PAD=70,HEADER_H=44,ROW_H=38,ROW_GAP=5,BOTTOM_PAD=72,RADIUS=4;
 
-  let minDate=new Date(allRows[0].start),maxDate=new Date(allRows[0].end);
-  allRows.forEach(r=>{const s=new Date(r.start),e=new Date(r.end);if(s<minDate)minDate=s;if(e>maxDate)maxDate=e;});
-  if(p.occupancyDate&&String(p.occupancyDate).length>=10){const od=new Date(p.occupancyDate);if(od>maxDate)maxDate=od;}
-  const padMin=new Date(minDate); // no left padding — bars must start exactly on their date
+  let minDate=parseD(allRows[0].start),maxDate=parseD(allRows[0].end);
+  allRows.forEach(r=>{const s=parseD(r.start),e=parseD(r.end);if(s<minDate)minDate=s;if(e>maxDate)maxDate=e;});
+  // Always extend canvas to include occupancy date or last phase end
+  const lastPhaseEntry=schedule[schedule.length-1];
+  const projectEndDate=(p.occupancyDate&&p.occupancyDate.length>=10)?p.occupancyDate:lastPhaseEntry.end;
+  const projEndD=parseD(projectEndDate);
+  if(projEndD>maxDate) maxDate=projEndD;
+  const padMin=new Date(minDate);
   const padMax=new Date(maxDate);padMax.setDate(padMax.getDate()+4);
   const totalDays=(padMax-padMin)/86400000;
   const spanDays=(new Date(schedule[schedule.length-1].end)-new Date(schedule[0].start))/86400000;
@@ -3179,13 +3183,12 @@ function drawGantt(p){
   c.style.width=CANVAS_W+'px';c.style.height=CANVAS_H+'px';
   const ctx=c.getContext('2d');ctx.scale(DPR,DPR);
   const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  // dateToX maps a date string to its x position, centered on that day's tick
-  function dateToX(d){
-    const days=(new Date(d)-padMin)/86400000;
-    return CHART_X+(days/totalDays)*CHART_W;
-  }
-  function fmtDate(s){if(!s)return'';const d=new Date(s+'T12:00:00');const mo=String(d.getMonth()+1).padStart(2,'0');const dy=String(d.getDate()).padStart(2,'0');return mo+'-'+dy+'-'+d.getFullYear();}
-  function fmtShort(s){if(!s)return'';const d=new Date(s+'T12:00:00');return MO[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();}
+  // Parse date string safely without timezone shift
+  function parseD(s){if(!s)return new Date();const str=String(s).slice(0,10);const p=str.split('-');if(p.length===3)return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]),12,0,0);return new Date(str+'T12:00:00');}
+  // dateToX maps a YYYY-MM-DD date string to its x position
+  function dateToX(d){return CHART_X+(parseD(d)-padMin)/86400000/totalDays*CHART_W;}
+  function fmtDate(s){if(!s)return'';const d=parseD(s);const mo=String(d.getMonth()+1).padStart(2,'0');const dy=String(d.getDate()).padStart(2,'0');return mo+'-'+dy+'-'+d.getFullYear();}
+  function fmtShort(s){if(!s)return'';const d=parseD(s);return MO[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();}
 
   // Background
   ctx.fillStyle='#f0f2f7';ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
@@ -3248,14 +3251,34 @@ function drawGantt(p){
       cur.setDate(cur.getDate()+7);
     }
   } else {
-    const cur=new Date(padMin);let lastYear=-1;
+    const cur=new Date(padMin.getFullYear(),padMin.getMonth(),1,12,0,0);
+    let lastYear=-1;
     while(cur<=padMax){
-      const x=dateToX(cur);const yr=cur.getFullYear();const mo=cur.getMonth();
-      if(yr!==lastYear){ctx.fillStyle='#334';ctx.font=`700 9px ${FONT}`;ctx.fillText(String(yr),x+3,headerY+13);ctx.strokeStyle='#b8c4d4';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,headerY+axisH1);ctx.stroke();lastYear=yr;}
-      ctx.fillStyle='#445';ctx.font=`600 9px ${FONT}`;ctx.textAlign='center';
-      const nextX=dateToX(new Date(yr,mo+1,1));ctx.fillText(MO[mo],x+(nextX-x)/2,headerY+axisH1+axisH2-7);ctx.textAlign='left';
-      ctx.strokeStyle='#dde2ea';ctx.lineWidth=1;ctx.setLineDash([2,3]);
-      ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();ctx.setLineDash([]);
+      const yr=cur.getFullYear();const mo=cur.getMonth();
+      const dateStr=yr+'-'+String(mo+1).padStart(2,'0')+'-01';
+      const x=dateToX(dateStr);
+      const nextMo=new Date(yr,mo+1,1,12,0,0);
+      const nextStr=nextMo.getFullYear()+'-'+String(nextMo.getMonth()+1).padStart(2,'0')+'-01';
+      const nextX=dateToX(nextStr);
+      const monthW=nextX-x;
+      if(yr!==lastYear){
+        ctx.fillStyle='#334';ctx.font=`700 9px ${FONT}`;ctx.fillText(String(yr),x+3,headerY+13);
+        ctx.strokeStyle='#8898aa';ctx.lineWidth=1.5;ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,headerY+axisH1);ctx.stroke();
+        ctx.strokeStyle='#c0c8d4';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();
+        lastYear=yr;
+      } else {
+        ctx.strokeStyle='#dde2ea';ctx.lineWidth=0.75;ctx.setLineDash([2,3]);
+        ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.strokeStyle='#ccd4de';ctx.lineWidth=1;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(x,headerY+axisH1);ctx.lineTo(x,headerY+HEADER_H);ctx.stroke();
+      if(monthW>=20){
+        ctx.fillStyle='#445';ctx.font=`${monthW>=30?'600':'500'} ${monthW>=30?9:8}px ${FONT}`;
+        ctx.textAlign='center';ctx.fillText(MO[mo],x+monthW/2,headerY+axisH1+axisH2-7);ctx.textAlign='left';
+      }
       cur.setMonth(cur.getMonth()+1);
     }
   }
@@ -3303,8 +3326,6 @@ function drawGantt(p){
   // Milestone — Project End anchors to Occupancy Date if set, otherwise last phase schedule entry
   const diaY=bottomY+22;
   const milestones=[];
-  const lastPhaseEntry=schedule[schedule.length-1];
-  const projectEndDate=(p.occupancyDate&&String(p.occupancyDate).length>=10)?p.occupancyDate:lastPhaseEntry.end;
   milestones.push({x:dateToX(projectEndDate),color:'#041E42',top:'Project End',bot:fmtDate(projectEndDate)});
   milestones.forEach((m)=>{
     ctx.fillStyle=m.color;
