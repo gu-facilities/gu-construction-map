@@ -1353,14 +1353,22 @@ function readPhaseSchedule(){
 function getActivePhase(project, date){
   if(!project.phaseSchedule||!project.phaseSchedule.length) return project.phase;
   const d=new Date(date);
+  // First check if date falls within any phase
   for(const entry of project.phaseSchedule){
     const s=new Date(entry.start), e=new Date(entry.end);
     if(d>=s&&d<=e) return entry.phase;
   }
+  // Date is before first phase
   const first=project.phaseSchedule[0];
   if(d<new Date(first.start)) return first.phase;
-  const last=project.phaseSchedule[project.phaseSchedule.length-1];
-  return last.phase;
+  // Date is in a gap between phases — return the phase that just ended
+  for(let i=1;i<project.phaseSchedule.length;i++){
+    const prev=project.phaseSchedule[i-1];
+    const next=project.phaseSchedule[i];
+    if(d>new Date(prev.end)&&d<new Date(next.start)) return prev.phase;
+  }
+  // Date is after last phase — return last phase
+  return project.phaseSchedule[project.phaseSchedule.length-1].phase;
 }
 
 async function manualRefresh(){
