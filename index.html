@@ -442,7 +442,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 <!-- CONTEXT MENU -->
 <div class="ctx-menu" id="ctxMenu">
   <button onclick="openEditExtents()">✏️ Edit</button>
-  <button onclick="duplicateProject()">📋 Duplicate</button>
+  <button onclick="refreshProjectToLatest()">🔄 Refresh to Latest</button>
   <button onclick="exportGanttChart()">📊 Export Gantt Chart</button>
   <button class="danger" onclick="confirmRemoveProject()">🗑 Remove</button>
 </div>
@@ -2637,66 +2637,19 @@ function confirmRemoveProject(){ctxMenu.style.display='none';document.getElement
 function closeConfirm(){document.getElementById('confirmOverlay').classList.remove('show');}
 function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(contextProjectId));closeConfirm();map.closePopup();refreshMap();renderSidebar();updateStats();buildMiniLegend();apiPost({action:'delete',id:contextProjectId});}
 
-function duplicateProject(){
+function refreshProjectToLatest(){
   ctxMenu.style.display='none';
-  const src=projects.find(x=>String(x.id)===String(contextProjectId));
-  if(!src) return;
-
-  // Open wizard pre-filled with source project data
-  openWizard();
-
-  // Fill in all text fields
-  document.getElementById('wiz-name').value=src.name+' (Copy)';
-  document.getElementById('wiz-manager').value='';
-  populatePMDropdowns();
-  document.getElementById('wiz-manager').value=src.manager||'';
-  document.getElementById('wiz-proj-type').value=src.projType||'';
-  onWizProjTypeChange();
-  if(src.charterStatus) document.getElementById('wiz-charter-status').value=src.charterStatus;
-  document.getElementById('wiz-type').value=src.type||'';
-  document.getElementById('wiz-phase').value=src.phase||'programming';
-  document.getElementById('wiz-desc').value=src.desc||'';
-  if(document.getElementById('wiz-activity-summary')) document.getElementById('wiz-activity-summary').value=src.activitySummary||'';
-  if(document.getElementById('wiz-activity-forecast')) document.getElementById('wiz-activity-forecast').value=src.activityForecast||'';
-
-  // Copy custom timeframes
-  window._wizCustomTimeframes=(src.customTimeframes||[]).map(ct=>({...ct}));
-
-  // Copy shapes
-  wizExtentShapes=src.shapes.filter(s=>!s.isStagingArea&&!s.isRoadClosure&&!s.isPedAccess).map(s=>({...s}));
-  wizStagingShapes=src.shapes.filter(s=>s.isStagingArea).map(s=>({...s}));
-  wizRoadShapes=src.shapes.filter(s=>s.isRoadClosure).map(s=>({...s}));
-  wizPedShapes=src.shapes.filter(s=>s.isPedAccess).map(s=>({...s}));
-
-  // Show staging/road/ped tools if shapes exist
-  if(wizStagingShapes.length){
-    stagingYN=true;
-    document.getElementById('yn-yes').classList.add('active');
-    document.getElementById('yn-no').classList.remove('active');
-    document.getElementById('stagingDrawTools').style.display='block';
-    updateDrawnItemsEl(wizStagingShapes,'drawnStaging','staging');
-  }
-  if(wizRoadShapes.length){
-    roadYN=true;
-    document.getElementById('yn-road-yes').classList.add('active');
-    document.getElementById('yn-road-no').classList.remove('active');
-    document.getElementById('roadDrawTools').style.display='block';
-    updateDrawnItemsEl(wizRoadShapes,'drawnRoad','road');
-  }
-  if(wizPedShapes.length){
-    document.getElementById('yn-ped-yes').classList.add('active');
-    document.getElementById('yn-ped-no').classList.remove('active');
-    document.getElementById('pedDrawTools').style.display='block';
-    updateDrawnItemsEl(wizPedShapes,'drawnPed','ped');
-  }
-  updateDrawnItemsEl(wizExtentShapes,'drawnExtents','extents');
-
-  // Rebuild phase schedule (dates left blank for user to fill in)
-  buildPhaseSchedule();
-
-  // Show hint
-  showHint('Project duplicated — update the phase dates and save',4000);
-  redraw();
+  const p=projects.find(x=>String(x.id)===String(contextProjectId));
+  if(!p){ showHint('Project not found',2000); return; }
+  showHint(`Refreshing "${p.name}"…`,1500);
+  apiPost({action:'update',project:{...p,
+    phaseSchedule:p.phaseSchedule||[],
+    stagingYN:!!p.shapes.some(s=>s.isStagingArea),
+    roadYN:!!p.shapes.some(s=>s.isRoadClosure)
+  }}).then(res=>{
+    if(res&&res.success) showHint(`✓ "${p.name}" refreshed to latest`,2500);
+    else showHint(`⚠ Could not refresh — try again`,3000);
+  });
 }
 
 // ── TOGGLE FILTERS ──────────────────────────────────────────────────
