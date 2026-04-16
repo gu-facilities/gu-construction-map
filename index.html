@@ -3157,7 +3157,7 @@ function drawGantt(p){
   const allRows=[...schedule,...customTFs.map(ct=>({phase:'custom',label:ct.title,start:ct.start,end:ct.end,isCustom:true}))];
 
   const DPR=2,FONT='Source Sans 3, Arial, sans-serif';
-  const LABEL_W=190,LEFT_PAD=24,RIGHT_PAD=48;
+  const LABEL_W=160,LEFT_PAD=24,RIGHT_PAD=48;
   const TOP_PAD=70,HEADER_H=44,ROW_H=38,ROW_GAP=5,BOTTOM_PAD=72,RADIUS=4;
 
   let minDate=parseD(allRows[0].start),maxDate=parseD(allRows[0].end);
