@@ -798,6 +798,8 @@ function normalizeProjectDates(p){
   return {...p,
     start:toYMD(p.start),
     end:toYMD(p.end),
+    occupancyDate:toYMD(p.occupancyDate),
+    substCompletionDate:toYMD(p.substCompletionDate),
     phaseSchedule:(p.phaseSchedule||[]).map(e=>({...e,start:toYMD(e.start),end:toYMD(e.end)})),
     shapes:(p.shapes||[]).map(s=>({...s,
       start:toYMD(s.start),end:toYMD(s.end),
@@ -3164,9 +3166,10 @@ function drawGantt(p){
   const padMin=new Date(minDate); // no left padding — bars must start exactly on their date
   const padMax=new Date(maxDate);padMax.setDate(padMax.getDate()+4);
   const totalDays=(padMax-padMin)/86400000;
-  const spanDays=(new Date(allRows[allRows.length-1].end)-new Date(allRows[0].start))/86400000;
-  const tickMode=spanDays<=60?'day':spanDays<=365*2?'week':'month';
-  const DAY_W=tickMode==='day'?Math.min(Math.max(Math.round(700/totalDays),8),28):tickMode==='week'?Math.min(Math.max(Math.round(700/totalDays),3),12):Math.min(Math.max(Math.round(780/totalDays),5),22);
+  const spanDays=(new Date(schedule[schedule.length-1].end)-new Date(schedule[0].start))/86400000;
+  // day mode: ≤45 days | week mode: ≤120 days | month mode: everything longer
+  const tickMode=spanDays<=45?'day':spanDays<=120?'week':'month';
+  const DAY_W=tickMode==='day'?Math.min(Math.max(Math.round(700/totalDays),8),28):tickMode==='week'?Math.min(Math.max(Math.round(700/totalDays),4),14):Math.min(Math.max(Math.round(780/totalDays),5),28);
   const CHART_W=Math.max(780,totalDays*DAY_W);
   const CANVAS_W=LEFT_PAD+LABEL_W+CHART_W+RIGHT_PAD;
   const CANVAS_H=TOP_PAD+HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP+BOTTOM_PAD;
