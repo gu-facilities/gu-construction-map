@@ -3157,8 +3157,8 @@ function drawGantt(p){
   let minDate=new Date(allRows[0].start),maxDate=new Date(allRows[0].end);
   allRows.forEach(r=>{const s=new Date(r.start),e=new Date(r.end);if(s<minDate)minDate=s;if(e>maxDate)maxDate=e;});
   if(p.occupancyDate&&String(p.occupancyDate).length>=10){const od=new Date(p.occupancyDate);if(od>maxDate)maxDate=od;}
-  const padMin=new Date(minDate);padMin.setDate(padMin.getDate()-1);
-  const padMax=new Date(maxDate);padMax.setDate(padMax.getDate()+3);
+  const padMin=new Date(minDate); // no left padding — bars must start exactly on their date
+  const padMax=new Date(maxDate);padMax.setDate(padMax.getDate()+4);
   const totalDays=(padMax-padMin)/86400000;
   const spanDays=(new Date(allRows[allRows.length-1].end)-new Date(allRows[0].start))/86400000;
   const tickMode=spanDays<=60?'day':spanDays<=365*2?'week':'month';
@@ -3261,7 +3261,12 @@ function drawGantt(p){
     ctx.fillStyle='#1a2a3a';ctx.font=`700 10px ${FONT}`;ctx.fillText(rowLabel,LEFT_PAD+12,y+ROW_H/2-3);
     ctx.fillStyle='#8a96a3';ctx.font=`400 8.5px ${FONT}`;ctx.fillText(fmtDate(entry.start)+' – '+fmtDate(entry.end),LEFT_PAD+12,y+ROW_H/2+9);
     const x1=Math.max(CHART_X+1,dateToX(entry.start));
-    const x2=Math.min(CHART_X+CHART_W-1,dateToX(entry.end));
+    // Extend bar to next phase start (no gap) or use own end date for last row / custom TFs
+    let barEndDate=entry.end;
+    if(!isCustom&&i<allRows.length-1&&!allRows[i+1].isCustom){
+      barEndDate=allRows[i+1].start; // extend to next phase start
+    }
+    const x2=Math.min(CHART_X+CHART_W-1,dateToX(barEndDate));
     const barW=Math.max(6,x2-x1);
     const barY=y+ROW_H*0.18;const barH=ROW_H*0.64;
     ctx.shadowColor='rgba(0,0,0,0.08)';ctx.shadowBlur=3;ctx.shadowOffsetY=1;
