@@ -3163,8 +3163,8 @@ function drawGantt(p){
   let minDate=parseD(allRows[0].start),maxDate=parseD(allRows[0].end);
   allRows.forEach(r=>{const s=parseD(r.start),e=parseD(r.end);if(s<minDate)minDate=s;if(e>maxDate)maxDate=e;});
   // Always extend canvas to include occupancy date or last phase end
-  const lastPhaseEntry=schedule[schedule.length-1];
-  const projectEndDate=(p.occupancyDate&&p.occupancyDate.length>=10)?p.occupancyDate:lastPhaseEntry.end;
+  const lastPhaseEntry=schedule.reduce((a,b)=>parseD(a.end)>=parseD(b.end)?a:b);
+  const projectEndDate=(p.occupancyDate&&String(p.occupancyDate).trim().length>=8)?p.occupancyDate:lastPhaseEntry.end;
   const projEndD=parseD(projectEndDate);
   if(projEndD>maxDate) maxDate=projEndD;
   const padMin=new Date(minDate);
