@@ -3302,10 +3302,15 @@ function drawGantt(p){
     ctx.fillStyle='#1a2a3a';ctx.font=`700 10px ${FONT}`;ctx.fillText(rowLabel,LEFT_PAD+12,y+ROW_H/2-3);
     ctx.fillStyle='#8a96a3';ctx.font=`400 8.5px ${FONT}`;ctx.fillText(fmtDate(entry.start)+' – '+fmtDate(entry.end),LEFT_PAD+12,y+ROW_H/2+9);
     const x1=Math.max(CHART_X+1,dateToX(entry.start));
-    // Extend bar to next phase start (no gap) or use own end date for last row / custom TFs
+    // Only extend bar to next phase start if they are consecutive (no gap AND no overlap)
+    // If phases overlap or have a gap, respect the actual end date
     let barEndDate=entry.end;
     if(!isCustom&&i<allRows.length-1&&!allRows[i+1].isCustom){
-      barEndDate=allRows[i+1].start; // extend to next phase start
+      const thisEnd=parseD(entry.end);
+      const nextStart=parseD(allRows[i+1].start);
+      const diffDays=(nextStart-thisEnd)/86400000;
+      // Only extend if next phase starts within 2 days of this end (consecutive or 1-day gap)
+      if(diffDays>=0&&diffDays<=2) barEndDate=allRows[i+1].start;
     }
     const x2=Math.min(CHART_X+CHART_W-1,dateToX(barEndDate));
     const barW=Math.max(6,x2-x1);
