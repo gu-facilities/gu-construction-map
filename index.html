@@ -2170,6 +2170,7 @@ function openEditExtents(){
   buildEditShapeTimeline(p, 'road', 'edit-road-phase-grid');
   buildEditShapeTimeline(p, 'ped', 'edit-ped-phase-grid');
   document.getElementById('editPanel').classList.add('show');
+  document.getElementById('editPanel').scrollTop=0;
   setTimeout(showVertexHandles, 100);
 }
 
@@ -3193,7 +3194,7 @@ function drawGantt(p){
   ctx.fillStyle='#ffffff';ctx.font=`700 17px ${FONT}`;ctx.fillText(p.name,LEFT_PAD+14,32);
   const sub=[p.type,p.manager,PHASES[p.phase]?.label].filter(Boolean).join('  ·  ');
   ctx.fillStyle='rgba(201,169,110,0.85)';ctx.font=`400 10px ${FONT}`;ctx.fillText(sub,LEFT_PAD+14,50);
-  const dRange=fmtShort(allRows[0].start)+' — '+fmtShort(allRows[allRows.length-1].end);
+  const dRange=fmtShort(schedule[0].start)+' — '+fmtShort(schedule[schedule.length-1].end);
   ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font=`400 9px ${FONT}`;
   ctx.textAlign='right';ctx.fillText(dRange,CANVAS_W-RIGHT_PAD,32);ctx.textAlign='left';
 
@@ -3296,10 +3297,12 @@ function drawGantt(p){
   ctx.beginPath();ctx.moveTo(LEFT_PAD,bottomY);ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,bottomY);ctx.stroke();
   ctx.lineWidth=1;ctx.strokeRect(LEFT_PAD,TOP_PAD,LABEL_W+CHART_W,HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP);
 
-  // Milestone — Project End only
+  // Milestone — Project End anchors to Occupancy Date if set, otherwise last phase schedule entry
   const diaY=bottomY+22;
   const milestones=[];
-  milestones.push({x:dateToX(fmtDate(allRows[allRows.length-1].end)),color:'#041E42',top:'Project End',bot:fmtDate(allRows[allRows.length-1].end)});
+  const lastPhaseEntry=schedule[schedule.length-1];
+  const projectEndDate=(p.occupancyDate&&String(p.occupancyDate).length>=10)?p.occupancyDate:lastPhaseEntry.end;
+  milestones.push({x:dateToX(projectEndDate),color:'#041E42',top:'Project End',bot:fmtDate(projectEndDate)});
   milestones.forEach((m)=>{
     ctx.fillStyle=m.color;
     ctx.beginPath();ctx.moveTo(m.x,diaY-8);ctx.lineTo(m.x+8,diaY);ctx.lineTo(m.x,diaY+8);ctx.lineTo(m.x-8,diaY);ctx.closePath();ctx.fill();
