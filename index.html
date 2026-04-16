@@ -2378,11 +2378,9 @@ function buildEditPhaseSchedule(p){
   const container=document.getElementById('edit-phase-sched');
   if(!container)return;
   const schedule=p.phaseSchedule||[];
-  const startPhase=p.phase||'programming';
-  const startIdx=PHASE_ORDER.indexOf(startPhase);
-  const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0);
-  const regularPhases=phases.filter(ph=>ph!=='on_hold');
-  const hasOnHold=phases.includes('on_hold');
+  // Always show ALL phases from programming so dates can be entered for any phase
+  const regularPhases=PHASE_ORDER.filter(ph=>ph!=='on_hold');
+  const hasOnHold=true; // always show On Hold option
   const onHoldVal=p.onHold?'yes':'no';
 
   let html='<div class="phase-sched">';
@@ -2452,9 +2450,11 @@ function buildEditPhaseSchedule(p){
 }
 
 function readEditPhaseSchedule(p){
-  const startPhase=p.phase||'programming';
+  // Use the current dropdown value, not the stale p.phase
+  const startPhase=document.getElementById('edit-phase')?.value||p.phase||'programming';
   const startIdx=PHASE_ORDER.indexOf(startPhase);
-  const phases=PHASE_ORDER.slice(startIdx>=0?startIdx:0).filter(ph=>ph!=='on_hold');
+  // Always read from the beginning of PHASE_ORDER so all phases are captured
+  const phases=PHASE_ORDER.filter(ph=>ph!=='on_hold');
   const entries=[];
   phases.forEach(ph=>{
     const s=document.getElementById('eps-'+ph+'-start')?.value;
