@@ -442,6 +442,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 <!-- CONTEXT MENU -->
 <div class="ctx-menu" id="ctxMenu">
   <button onclick="openEditExtents()">✏️ Edit</button>
+  <button onclick="duplicateProject()">📋 Duplicate</button>
   <button onclick="exportGanttChart()">📊 Export Gantt Chart</button>
   <button class="danger" onclick="confirmRemoveProject()">🗑 Remove</button>
 </div>
@@ -766,19 +767,7 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 
 <script>
 const SHEET_API = 'https://script.google.com/macros/s/AKfycbzHS6el8-wtdswUTKvqsLf9ly9P8Vyf8nJ505f_5m24zzoqPUij12-W6B-UIwR2MAwm/exec';
-async function apiGet(){
-  try{
-    const r=await fetch(SHEET_API);
-    const d=await r.json();
-    if(d.projects&&d.projects.length){
-      const first=d.projects[0];
-      console.log('API sample — id:',first.id,'phase:',first.phase,
-        'phaseSchedule length:',first.phaseSchedule?.length||0,
-        'phaseSchedule:',JSON.stringify(first.phaseSchedule||[]).slice(0,200));
-    }
-    return d.projects||null;
-  }catch(e){console.error('apiGet error:',e);return null;}
-}
+async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
 
 // ── DATE NORMALIZATION ───────────────────────────────────────────────
@@ -2647,6 +2636,68 @@ function showContextMenu(e,id){e.preventDefault();e.stopPropagation();contextPro
 function confirmRemoveProject(){ctxMenu.style.display='none';document.getElementById('confirmOverlay').classList.add('show');}
 function closeConfirm(){document.getElementById('confirmOverlay').classList.remove('show');}
 function doRemoveProject(){projects=projects.filter(p=>String(p.id)!==String(contextProjectId));closeConfirm();map.closePopup();refreshMap();renderSidebar();updateStats();buildMiniLegend();apiPost({action:'delete',id:contextProjectId});}
+
+function duplicateProject(){
+  ctxMenu.style.display='none';
+  const src=projects.find(x=>String(x.id)===String(contextProjectId));
+  if(!src) return;
+
+  // Open wizard pre-filled with source project data
+  openWizard();
+
+  // Fill in all text fields
+  document.getElementById('wiz-name').value=src.name+' (Copy)';
+  document.getElementById('wiz-manager').value='';
+  populatePMDropdowns();
+  document.getElementById('wiz-manager').value=src.manager||'';
+  document.getElementById('wiz-proj-type').value=src.projType||'';
+  onWizProjTypeChange();
+  if(src.charterStatus) document.getElementById('wiz-charter-status').value=src.charterStatus;
+  document.getElementById('wiz-type').value=src.type||'';
+  document.getElementById('wiz-phase').value=src.phase||'programming';
+  document.getElementById('wiz-desc').value=src.desc||'';
+  if(document.getElementById('wiz-activity-summary')) document.getElementById('wiz-activity-summary').value=src.activitySummary||'';
+  if(document.getElementById('wiz-activity-forecast')) document.getElementById('wiz-activity-forecast').value=src.activityForecast||'';
+
+  // Copy custom timeframes
+  window._wizCustomTimeframes=(src.customTimeframes||[]).map(ct=>({...ct}));
+
+  // Copy shapes
+  wizExtentShapes=src.shapes.filter(s=>!s.isStagingArea&&!s.isRoadClosure&&!s.isPedAccess).map(s=>({...s}));
+  wizStagingShapes=src.shapes.filter(s=>s.isStagingArea).map(s=>({...s}));
+  wizRoadShapes=src.shapes.filter(s=>s.isRoadClosure).map(s=>({...s}));
+  wizPedShapes=src.shapes.filter(s=>s.isPedAccess).map(s=>({...s}));
+
+  // Show staging/road/ped tools if shapes exist
+  if(wizStagingShapes.length){
+    stagingYN=true;
+    document.getElementById('yn-yes').classList.add('active');
+    document.getElementById('yn-no').classList.remove('active');
+    document.getElementById('stagingDrawTools').style.display='block';
+    updateDrawnItemsEl(wizStagingShapes,'drawnStaging','staging');
+  }
+  if(wizRoadShapes.length){
+    roadYN=true;
+    document.getElementById('yn-road-yes').classList.add('active');
+    document.getElementById('yn-road-no').classList.remove('active');
+    document.getElementById('roadDrawTools').style.display='block';
+    updateDrawnItemsEl(wizRoadShapes,'drawnRoad','road');
+  }
+  if(wizPedShapes.length){
+    document.getElementById('yn-ped-yes').classList.add('active');
+    document.getElementById('yn-ped-no').classList.remove('active');
+    document.getElementById('pedDrawTools').style.display='block';
+    updateDrawnItemsEl(wizPedShapes,'drawnPed','ped');
+  }
+  updateDrawnItemsEl(wizExtentShapes,'drawnExtents','extents');
+
+  // Rebuild phase schedule (dates left blank for user to fill in)
+  buildPhaseSchedule();
+
+  // Show hint
+  showHint('Project duplicated — update the phase dates and save',4000);
+  redraw();
+}
 
 // ── TOGGLE FILTERS ──────────────────────────────────────────────────
 function setFilterWindow(){
