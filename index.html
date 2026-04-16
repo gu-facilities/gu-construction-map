@@ -3203,7 +3203,9 @@ function drawGantt(p){
     while(cur<=padMax){
       const x=dateToX(cur);const dow=cur.getDay();const isWE=(dow===0||dow===6);
       const mo=cur.getMonth();const dy=cur.getDate();
+      // Weekend shading
       if(isWE){ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(x,headerY+axisH1,DAY_W,axisH2);}
+      // Month label when month changes
       if(mo!==lastMonth){
         ctx.fillStyle='#334';ctx.font=`700 9px ${FONT}`;
         ctx.fillText(MO[mo]+' '+cur.getFullYear(),x+3,headerY+13);
@@ -3211,10 +3213,15 @@ function drawGantt(p){
         ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,headerY+axisH1);ctx.stroke();
         lastMonth=mo;
       }
-      ctx.fillStyle=isWE?'#99a':'#445';ctx.font=`${dow===1?'700':'400'} 8px ${FONT}`;
-      ctx.textAlign='center';ctx.fillText(dy,x+DAY_W/2,headerY+axisH1+axisH2-7);ctx.textAlign='left';
+      // Day number — left-aligned at the tick so "16" sits right at Apr 16's grid line
+      ctx.fillStyle=isWE?'#99a':'#445';
+      ctx.font=`${dow===1?'700':'400'} 8px ${FONT}`;
+      ctx.textAlign='left';
+      ctx.fillText(dy,x+2,headerY+axisH1+axisH2-7);
+      // Grid line into rows
       ctx.strokeStyle=isWE?'#d8dde8':'#eaecf1';ctx.lineWidth=isWE?1:0.5;ctx.setLineDash([]);
       ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();
+      // Monday dashed marker
       if(dow===1){ctx.strokeStyle='#c8d0da';ctx.lineWidth=0.75;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x,headerY+axisH1);ctx.lineTo(x,headerY+HEADER_H);ctx.stroke();ctx.setLineDash([]);}
       cur.setDate(cur.getDate()+1);
     }
@@ -3272,7 +3279,6 @@ function drawGantt(p){
     ctx.shadowColor='rgba(0,0,0,0.08)';ctx.shadowBlur=3;ctx.shadowOffsetY=1;
     ctx.fillStyle=barColor;roundRect(ctx,x1,barY,barW,barH,RADIUS);ctx.fill();
     ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-    if(barW>55){ctx.save();ctx.rect(x1+2,barY,barW-4,barH);ctx.clip();ctx.fillStyle='rgba(255,255,255,0.95)';ctx.font=`600 9.5px ${FONT}`;ctx.fillText(rowLabel,x1+8,barY+barH/2+3.5);ctx.restore();}
     ctx.strokeStyle='#eaecf0';ctx.lineWidth=0.5;
     ctx.beginPath();ctx.moveTo(LEFT_PAD,y+ROW_H);ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,y+ROW_H);ctx.stroke();
   });
@@ -3283,22 +3289,17 @@ function drawGantt(p){
   ctx.beginPath();ctx.moveTo(LEFT_PAD,bottomY);ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,bottomY);ctx.stroke();
   ctx.lineWidth=1;ctx.strokeRect(LEFT_PAD,TOP_PAD,LABEL_W+CHART_W,HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP);
 
-  // Milestones — stagger if overlapping
+  // Milestone — Project End only
+  const diaY=bottomY+18;
   const milestones=[];
   milestones.push({x:dateToX(fmtDate(allRows[allRows.length-1].end)),color:'#041E42',top:'Project End',bot:fmtDate(allRows[allRows.length-1].end)});
-  if(p.occupancyDate&&String(p.occupancyDate).length>=10)
-    milestones.push({x:dateToX(p.occupancyDate),color:'#2a6099',top:'Occupancy',bot:fmtDate(p.occupancyDate)});
-  milestones.sort((a,b)=>a.x-b.x);
-  const diaY=bottomY+18;
-  milestones.forEach((m,mi)=>{
+  milestones.forEach((m)=>{
     ctx.fillStyle=m.color;
     ctx.beginPath();ctx.moveTo(m.x,diaY-8);ctx.lineTo(m.x+8,diaY);ctx.lineTo(m.x,diaY+8);ctx.lineTo(m.x-8,diaY);ctx.closePath();ctx.fill();
-    // Stagger: even milestones label above diamond, odd below — prevents overlap
-    const above=mi%2===0;
     ctx.fillStyle=m.color;ctx.font=`600 8.5px ${FONT}`;ctx.textAlign='center';
-    ctx.fillText(m.top,m.x,above?diaY-13:diaY+20);
+    ctx.fillText(m.top,m.x,diaY-13);
     ctx.fillStyle='#8a96a3';ctx.font=`400 8px ${FONT}`;
-    ctx.fillText(m.bot,m.x,above?diaY-3:diaY+30);
+    ctx.fillText(m.bot,m.x,diaY-3);
     ctx.textAlign='left';
   });
 
