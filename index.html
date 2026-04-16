@@ -3147,85 +3147,108 @@ function downloadGanttPDF(){
 function drawGantt(p){
   const schedule=p.phaseSchedule;
   if(!schedule||!schedule.length) return null;
-
   const customTFs=(p.customTimeframes||[]).filter(ct=>ct.title&&ct.start&&ct.end);
-  const allRows=[
-    ...schedule,
-    ...customTFs.map(ct=>({phase:'custom',label:ct.title,start:ct.start,end:ct.end,isCustom:true}))
-  ];
+  const allRows=[...schedule,...customTFs.map(ct=>({phase:'custom',label:ct.title,start:ct.start,end:ct.end,isCustom:true}))];
 
-  const DPR=2, FONT='Source Sans 3, Arial, sans-serif';
-  const LABEL_W=190, LEFT_PAD=24, RIGHT_PAD=36;
-  const TOP_PAD=70, HEADER_H=28, ROW_H=38, ROW_GAP=5, BOTTOM_PAD=54, RADIUS=4;
+  const DPR=2,FONT='Source Sans 3, Arial, sans-serif';
+  const LABEL_W=190,LEFT_PAD=24,RIGHT_PAD=48;
+  const TOP_PAD=70,HEADER_H=44,ROW_H=38,ROW_GAP=5,BOTTOM_PAD=64,RADIUS=4;
 
-  let minDate=new Date(allRows[0].start), maxDate=new Date(allRows[0].end);
+  let minDate=new Date(allRows[0].start),maxDate=new Date(allRows[0].end);
   allRows.forEach(r=>{const s=new Date(r.start),e=new Date(r.end);if(s<minDate)minDate=s;if(e>maxDate)maxDate=e;});
-  minDate=new Date(minDate); minDate.setDate(1);
-  maxDate=new Date(maxDate); maxDate.setDate(1); maxDate.setMonth(maxDate.getMonth()+1);
-  const totalDays=(maxDate-minDate)/86400000;
-
-  const DAY_W=Math.min(Math.max(Math.round(780/totalDays),5),22);
+  if(p.occupancyDate&&String(p.occupancyDate).length>=10){const od=new Date(p.occupancyDate);if(od>maxDate)maxDate=od;}
+  const padMin=new Date(minDate);padMin.setDate(padMin.getDate()-1);
+  const padMax=new Date(maxDate);padMax.setDate(padMax.getDate()+3);
+  const totalDays=(padMax-padMin)/86400000;
+  const spanDays=(new Date(allRows[allRows.length-1].end)-new Date(allRows[0].start))/86400000;
+  const tickMode=spanDays<=60?'day':spanDays<=365*2?'week':'month';
+  const DAY_W=tickMode==='day'?Math.min(Math.max(Math.round(700/totalDays),8),28):tickMode==='week'?Math.min(Math.max(Math.round(700/totalDays),3),12):Math.min(Math.max(Math.round(780/totalDays),5),22);
   const CHART_W=Math.max(780,totalDays*DAY_W);
   const CANVAS_W=LEFT_PAD+LABEL_W+CHART_W+RIGHT_PAD;
   const CANVAS_H=TOP_PAD+HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP+BOTTOM_PAD;
   const CHART_X=LEFT_PAD+LABEL_W;
-
   const c=document.createElement('canvas');
-  c.width=CANVAS_W*DPR; c.height=CANVAS_H*DPR;
-  c.style.width=CANVAS_W+'px'; c.style.height=CANVAS_H+'px';
-  const ctx=c.getContext('2d');
-  ctx.scale(DPR,DPR);
-
-  function dateToX(d){return CHART_X+(new Date(d)-minDate)/86400000/totalDays*CHART_W;}
+  c.width=CANVAS_W*DPR;c.height=CANVAS_H*DPR;
+  c.style.width=CANVAS_W+'px';c.style.height=CANVAS_H+'px';
+  const ctx=c.getContext('2d');ctx.scale(DPR,DPR);
+  const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function dateToX(d){return CHART_X+(new Date(d)-padMin)/86400000/totalDays*CHART_W;}
   function fmtDate(s){return s?String(s).slice(0,10):'';}
-  function fmtShort(s){if(!s)return'';const d=new Date(s);return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();}
+  function fmtShort(s){if(!s)return'';const d=new Date(s);return MO[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();}
 
   // Background
-  ctx.fillStyle='#f0f2f7'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-  ctx.fillStyle='#ffffff'; ctx.fillRect(LEFT_PAD,TOP_PAD+HEADER_H,LABEL_W+CHART_W,allRows.length*(ROW_H+ROW_GAP)+ROW_GAP);
+  ctx.fillStyle='#f0f2f7';ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  ctx.fillStyle='#ffffff';ctx.fillRect(LEFT_PAD,TOP_PAD+HEADER_H,LABEL_W+CHART_W,allRows.length*(ROW_H+ROW_GAP)+ROW_GAP);
 
-  // Header band
-  ctx.fillStyle='#041E42'; ctx.fillRect(0,0,CANVAS_W,TOP_PAD-4);
-  // Gold accent bar
-  ctx.fillStyle='#C9A96E'; ctx.fillRect(LEFT_PAD,14,4,TOP_PAD-26);
-  // Title
-  ctx.fillStyle='#ffffff'; ctx.font=`700 17px ${FONT}`;
-  ctx.fillText(p.name, LEFT_PAD+14, 32);
-  // Subtitle
+  // Title header
+  ctx.fillStyle='#041E42';ctx.fillRect(0,0,CANVAS_W,TOP_PAD-4);
+  ctx.fillStyle='#C9A96E';ctx.fillRect(LEFT_PAD,14,4,TOP_PAD-26);
+  ctx.fillStyle='#ffffff';ctx.font=`700 17px ${FONT}`;ctx.fillText(p.name,LEFT_PAD+14,32);
   const sub=[p.type,p.manager,PHASES[p.phase]?.label].filter(Boolean).join('  ·  ');
-  ctx.fillStyle='rgba(201,169,110,0.85)'; ctx.font=`400 10px ${FONT}`;
-  ctx.fillText(sub, LEFT_PAD+14, 50);
-  // Date range top right
+  ctx.fillStyle='rgba(201,169,110,0.85)';ctx.font=`400 10px ${FONT}`;ctx.fillText(sub,LEFT_PAD+14,50);
   const dRange=fmtShort(allRows[0].start)+' — '+fmtShort(allRows[allRows.length-1].end);
-  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font=`400 9px ${FONT}`;
-  ctx.textAlign='right'; ctx.fillText(dRange,CANVAS_W-RIGHT_PAD,32); ctx.textAlign='left';
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font=`400 9px ${FONT}`;
+  ctx.textAlign='right';ctx.fillText(dRange,CANVAS_W-RIGHT_PAD,32);ctx.textAlign='left';
 
-  // Month header
+  // Axis header (2 rows: top=month/year label, bottom=day/week/month ticks)
   const headerY=TOP_PAD;
-  ctx.fillStyle='#dde3ec'; ctx.fillRect(CHART_X,headerY,CHART_W,HEADER_H);
-  ctx.fillStyle='#e8eaf0'; ctx.fillRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
-  ctx.fillStyle='#556'; ctx.font=`700 8.5px ${FONT}`;
-  ctx.fillText('PHASE / DATES', LEFT_PAD+10, headerY+HEADER_H/2+3);
+  const axisH1=18,axisH2=26;
+  ctx.fillStyle='#e8eaf0';ctx.fillRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
+  ctx.fillStyle='#556';ctx.font=`700 8.5px ${FONT}`;ctx.fillText('PHASE / DATES',LEFT_PAD+10,headerY+HEADER_H/2+3);
+  ctx.fillStyle='#dde3ec';ctx.fillRect(CHART_X,headerY,CHART_W,axisH1);
+  ctx.fillStyle='#e8ecf2';ctx.fillRect(CHART_X,headerY+axisH1,CHART_W,axisH2);
 
-  const mo_names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const cur=new Date(minDate);
-  while(cur<=maxDate){
-    const x=dateToX(cur);
-    const lbl=mo_names[cur.getMonth()]+" '"+String(cur.getFullYear()).slice(2);
-    ctx.strokeStyle='#dde2ea'; ctx.lineWidth=1; ctx.setLineDash([2,4]);
-    ctx.beginPath(); ctx.moveTo(x,headerY+HEADER_H); ctx.lineTo(x,CANVAS_H-BOTTOM_PAD); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle='#445'; ctx.font=`600 9px ${FONT}`;
-    ctx.fillText(lbl,x+4,headerY+HEADER_H/2+3);
-    cur.setMonth(cur.getMonth()+1);
+  if(tickMode==='day'){
+    const cur=new Date(padMin);let lastMonth=-1;
+    while(cur<=padMax){
+      const x=dateToX(cur);const dow=cur.getDay();const isWE=(dow===0||dow===6);
+      const mo=cur.getMonth();const dy=cur.getDate();
+      if(isWE){ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(x,headerY+axisH1,DAY_W,axisH2);}
+      if(mo!==lastMonth){
+        ctx.fillStyle='#334';ctx.font=`700 9px ${FONT}`;
+        ctx.fillText(MO[mo]+' '+cur.getFullYear(),x+3,headerY+13);
+        ctx.strokeStyle='#b8c4d4';ctx.lineWidth=1;ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,headerY+axisH1);ctx.stroke();
+        lastMonth=mo;
+      }
+      ctx.fillStyle=isWE?'#99a':'#445';ctx.font=`${dow===1?'700':'400'} 8px ${FONT}`;
+      ctx.textAlign='center';ctx.fillText(dy,x+DAY_W/2,headerY+axisH1+axisH2-7);ctx.textAlign='left';
+      ctx.strokeStyle=isWE?'#d8dde8':'#eaecf1';ctx.lineWidth=isWE?1:0.5;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();
+      if(dow===1){ctx.strokeStyle='#c8d0da';ctx.lineWidth=0.75;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(x,headerY+axisH1);ctx.lineTo(x,headerY+HEADER_H);ctx.stroke();ctx.setLineDash([]);}
+      cur.setDate(cur.getDate()+1);
+    }
+  } else if(tickMode==='week'){
+    const cur=new Date(padMin);let lastMonth=-1;
+    while(cur<=padMax){
+      const x=dateToX(cur);const mo=cur.getMonth();
+      if(mo!==lastMonth){ctx.fillStyle='#334';ctx.font=`700 9px ${FONT}`;ctx.fillText(MO[mo]+' '+cur.getFullYear(),x+3,headerY+13);ctx.strokeStyle='#b8c4d4';ctx.lineWidth=1;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,headerY+axisH1);ctx.stroke();lastMonth=mo;}
+      ctx.fillStyle='#445';ctx.font=`400 8px ${FONT}`;ctx.textAlign='center';
+      ctx.fillText(MO[cur.getMonth()]+' '+cur.getDate(),x+14,headerY+axisH1+axisH2-7);ctx.textAlign='left';
+      ctx.strokeStyle='#dde2ea';ctx.lineWidth=1;ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();ctx.setLineDash([]);
+      cur.setDate(cur.getDate()+7);
+    }
+  } else {
+    const cur=new Date(padMin);let lastYear=-1;
+    while(cur<=padMax){
+      const x=dateToX(cur);const yr=cur.getFullYear();const mo=cur.getMonth();
+      if(yr!==lastYear){ctx.fillStyle='#334';ctx.font=`700 9px ${FONT}`;ctx.fillText(String(yr),x+3,headerY+13);ctx.strokeStyle='#b8c4d4';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,headerY+axisH1);ctx.stroke();lastYear=yr;}
+      ctx.fillStyle='#445';ctx.font=`600 9px ${FONT}`;ctx.textAlign='center';
+      const nextX=dateToX(new Date(yr,mo+1,1));ctx.fillText(MO[mo],x+(nextX-x)/2,headerY+axisH1+axisH2-7);ctx.textAlign='left';
+      ctx.strokeStyle='#dde2ea';ctx.lineWidth=1;ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.moveTo(x,headerY+HEADER_H);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();ctx.setLineDash([]);
+      cur.setMonth(cur.getMonth()+1);
+    }
   }
 
-  // Header border
-  ctx.strokeStyle='#b8c2d0'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(LEFT_PAD,headerY+HEADER_H); ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,headerY+HEADER_H); ctx.stroke();
-  // Label/chart divider
+  // Header borders
+  ctx.strokeStyle='#cdd4de';ctx.lineWidth=0.75;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(CHART_X,headerY+axisH1);ctx.lineTo(CHART_X+CHART_W,headerY+axisH1);ctx.stroke();
+  ctx.strokeStyle='#b8c2d0';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(LEFT_PAD,headerY+HEADER_H);ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,headerY+HEADER_H);ctx.stroke();
   ctx.strokeStyle='#c8d0dc';
-  ctx.beginPath(); ctx.moveTo(CHART_X,headerY); ctx.lineTo(CHART_X,CANVAS_H-BOTTOM_PAD); ctx.stroke();
+  ctx.beginPath();ctx.moveTo(CHART_X,headerY);ctx.lineTo(CHART_X,CANVAS_H-BOTTOM_PAD);ctx.stroke();
 
   // Rows
   allRows.forEach((entry,i)=>{
@@ -3233,76 +3256,51 @@ function drawGantt(p){
     const barColor=isCustom?'#2A9D8F':(PHASES[entry.phase]?.color||'#8a96a3');
     const rowLabel=isCustom?entry.label:(PHASES[entry.phase]?.label||entry.phase);
     const y=TOP_PAD+HEADER_H+i*(ROW_H+ROW_GAP)+ROW_GAP/2;
-
-    // Row bg
-    const rowBg=i%2===0?'#ffffff':'#f8f9fb';
-    ctx.fillStyle=rowBg; ctx.fillRect(LEFT_PAD,y,LABEL_W+CHART_W,ROW_H);
-
-    // Phase color swatch
-    ctx.fillStyle=barColor; ctx.fillRect(LEFT_PAD,y,4,ROW_H);
-
-    // Phase name in label col
-    ctx.fillStyle='#1a2a3a'; ctx.font=`700 10px ${FONT}`;
-    ctx.fillText(rowLabel, LEFT_PAD+12, y+ROW_H/2-3);
-    // Dates in label col
-    ctx.fillStyle='#8a96a3'; ctx.font=`400 8.5px ${FONT}`;
-    ctx.fillText(fmtDate(entry.start)+' – '+fmtDate(entry.end), LEFT_PAD+12, y+ROW_H/2+9);
-
-    // Bar
+    ctx.fillStyle=i%2===0?'#ffffff':'#f8f9fb';ctx.fillRect(LEFT_PAD,y,LABEL_W+CHART_W,ROW_H);
+    ctx.fillStyle=barColor;ctx.fillRect(LEFT_PAD,y,4,ROW_H);
+    ctx.fillStyle='#1a2a3a';ctx.font=`700 10px ${FONT}`;ctx.fillText(rowLabel,LEFT_PAD+12,y+ROW_H/2-3);
+    ctx.fillStyle='#8a96a3';ctx.font=`400 8.5px ${FONT}`;ctx.fillText(fmtDate(entry.start)+' – '+fmtDate(entry.end),LEFT_PAD+12,y+ROW_H/2+9);
     const x1=Math.max(CHART_X+1,dateToX(entry.start));
     const x2=Math.min(CHART_X+CHART_W-1,dateToX(entry.end));
     const barW=Math.max(6,x2-x1);
-    const barY=y+ROW_H*0.18; const barH=ROW_H*0.64;
-
-    ctx.shadowColor='rgba(0,0,0,0.08)'; ctx.shadowBlur=3; ctx.shadowOffsetY=1;
-    ctx.fillStyle=barColor;
-    roundRect(ctx,x1,barY,barW,barH,RADIUS); ctx.fill();
-    ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-
-    // Bar label only if wide enough
-    if(barW>55){
-      ctx.save(); ctx.rect(x1+2,barY,barW-4,barH); ctx.clip();
-      ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.font=`600 9.5px ${FONT}`;
-      ctx.fillText(rowLabel,x1+8,barY+barH/2+3.5);
-      ctx.restore();
-    }
-
-    // Row separator
-    ctx.strokeStyle='#eaecf0'; ctx.lineWidth=0.5;
-    ctx.beginPath(); ctx.moveTo(LEFT_PAD,y+ROW_H); ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,y+ROW_H); ctx.stroke();
+    const barY=y+ROW_H*0.18;const barH=ROW_H*0.64;
+    ctx.shadowColor='rgba(0,0,0,0.08)';ctx.shadowBlur=3;ctx.shadowOffsetY=1;
+    ctx.fillStyle=barColor;roundRect(ctx,x1,barY,barW,barH,RADIUS);ctx.fill();
+    ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    if(barW>55){ctx.save();ctx.rect(x1+2,barY,barW-4,barH);ctx.clip();ctx.fillStyle='rgba(255,255,255,0.95)';ctx.font=`600 9.5px ${FONT}`;ctx.fillText(rowLabel,x1+8,barY+barH/2+3.5);ctx.restore();}
+    ctx.strokeStyle='#eaecf0';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(LEFT_PAD,y+ROW_H);ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,y+ROW_H);ctx.stroke();
   });
 
-  // Bottom border
+  // Bottom border + outer border
   const bottomY=TOP_PAD+HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP/2;
-  ctx.strokeStyle='#b8c2d0'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(LEFT_PAD,bottomY); ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,bottomY); ctx.stroke();
+  ctx.strokeStyle='#b8c2d0';ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(LEFT_PAD,bottomY);ctx.lineTo(LEFT_PAD+LABEL_W+CHART_W,bottomY);ctx.stroke();
+  ctx.lineWidth=1;ctx.strokeRect(LEFT_PAD,TOP_PAD,LABEL_W+CHART_W,HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP);
 
-  // Outer border
-  ctx.strokeStyle='#c8d0dc'; ctx.lineWidth=1;
-  ctx.strokeRect(LEFT_PAD,TOP_PAD,LABEL_W+CHART_W,HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP);
-
-  // Milestone diamonds
-  function drawDiamond(x,y,color,topLabel,bottomLabel){
-    ctx.fillStyle=color;
-    ctx.beginPath(); ctx.moveTo(x,y-8); ctx.lineTo(x+8,y); ctx.lineTo(x,y+8); ctx.lineTo(x-8,y); ctx.closePath(); ctx.fill();
-    ctx.fillStyle=color; ctx.font=`600 8.5px ${FONT}`; ctx.textAlign='center';
-    ctx.fillText(topLabel,x,y-12);
-    ctx.fillStyle='#8a96a3'; ctx.font=`400 8px ${FONT}`;
-    ctx.fillText(bottomLabel,x,y+18); ctx.textAlign='left';
-  }
-  const diaY=bottomY+20;
-  drawDiamond(dateToX(allRows[allRows.length-1].end),diaY,'#041E42','Project End',fmtDate(allRows[allRows.length-1].end));
-  if(p.occupancyDate&&String(p.occupancyDate).length>=10){
-    drawDiamond(dateToX(p.occupancyDate),diaY,'#2a6099','Occupancy',fmtDate(p.occupancyDate));
-  }
+  // Milestones — stagger if overlapping
+  const milestones=[];
+  milestones.push({x:dateToX(fmtDate(allRows[allRows.length-1].end)),color:'#041E42',top:'Project End',bot:fmtDate(allRows[allRows.length-1].end)});
+  if(p.occupancyDate&&String(p.occupancyDate).length>=10)
+    milestones.push({x:dateToX(p.occupancyDate),color:'#2a6099',top:'Occupancy',bot:fmtDate(p.occupancyDate)});
+  milestones.sort((a,b)=>a.x-b.x);
+  const diaY=bottomY+18;
+  milestones.forEach((m,mi)=>{
+    ctx.fillStyle=m.color;
+    ctx.beginPath();ctx.moveTo(m.x,diaY-8);ctx.lineTo(m.x+8,diaY);ctx.lineTo(m.x,diaY+8);ctx.lineTo(m.x-8,diaY);ctx.closePath();ctx.fill();
+    // Stagger: even milestones label above diamond, odd below — prevents overlap
+    const above=mi%2===0;
+    ctx.fillStyle=m.color;ctx.font=`600 8.5px ${FONT}`;ctx.textAlign='center';
+    ctx.fillText(m.top,m.x,above?diaY-13:diaY+20);
+    ctx.fillStyle='#8a96a3';ctx.font=`400 8px ${FONT}`;
+    ctx.fillText(m.bot,m.x,above?diaY-3:diaY+30);
+    ctx.textAlign='left';
+  });
 
   // Footer
-  ctx.fillStyle='#aab2be'; ctx.font=`400 8px ${FONT}`;
+  ctx.fillStyle='#aab2be';ctx.font=`400 8px ${FONT}`;
   ctx.fillText('Georgetown University  —  Facilities Management',LEFT_PAD,CANVAS_H-8);
-  ctx.textAlign='right';
-  ctx.fillText('Generated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),CANVAS_W-RIGHT_PAD,CANVAS_H-8);
-  ctx.textAlign='left';
-
+  ctx.textAlign='right';ctx.fillText('Generated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),CANVAS_W-RIGHT_PAD,CANVAS_H-8);ctx.textAlign='left';
   return c;
 }
 
