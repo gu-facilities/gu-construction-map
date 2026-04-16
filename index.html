@@ -3219,6 +3219,11 @@ function drawGantt(p){
   ctx.fillStyle='#dde3ec';ctx.fillRect(CHART_X,headerY,CHART_W,axisH1);
   ctx.fillStyle='#e8ecf2';ctx.fillRect(CHART_X,headerY+axisH1,CHART_W,axisH2);
 
+  // Clip all axis drawing to chart area only — prevents labels bleeding into label column
+  ctx.save();
+  ctx.rect(CHART_X, headerY, CHART_W, CANVAS_H);
+  ctx.clip();
+
   if(tickMode==='day'){
     const cur=new Date(padMin);let lastMonth=-1;
     while(cur<=padMax){
@@ -3289,6 +3294,9 @@ function drawGantt(p){
       cur.setMonth(cur.getMonth()+1);
     }
   }
+
+  // Restore clip — axis drawing done
+  ctx.restore();
 
   // Header borders
   ctx.strokeStyle='#cdd4de';ctx.lineWidth=0.75;ctx.setLineDash([]);
