@@ -3167,7 +3167,7 @@ function drawGantt(p){
   const projectEndDate=(p.occupancyDate&&String(p.occupancyDate).trim().length>=8)?p.occupancyDate:lastPhaseEntry.end;
   const projEndD=parseD(projectEndDate);
   if(projEndD>maxDate) maxDate=projEndD;
-  const padMin=new Date(minDate);
+  const padMin=new Date(minDate.getFullYear(),minDate.getMonth(),1,12,0,0);
   const padMax=new Date(maxDate);padMax.setDate(padMax.getDate()+4);
   const totalDays=(padMax-padMin)/86400000;
   const spanDays=(new Date(schedule[schedule.length-1].end)-new Date(schedule[0].start))/86400000;
