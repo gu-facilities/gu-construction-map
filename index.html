@@ -3207,8 +3207,15 @@ function drawGantt(p){
   // Axis header (2 rows: top=month/year label, bottom=day/week/month ticks)
   const headerY=TOP_PAD;
   const axisH1=18,axisH2=26;
-  ctx.fillStyle='#e8eaf0';ctx.fillRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
-  ctx.fillStyle='#556';ctx.font=`700 8.5px ${FONT}`;ctx.fillText('PHASE / DATES',LEFT_PAD+10,headerY+HEADER_H/2+3);
+  // Label column header — clean single box matching full header height
+  ctx.fillStyle='#e4e8f0';ctx.fillRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
+  // Clean border around label header
+  ctx.strokeStyle='#b8c2d4';ctx.lineWidth=1;ctx.setLineDash([]);
+  ctx.strokeRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
+  // "PHASE / DATES" text centered in header
+  ctx.fillStyle='#445';ctx.font=`700 8.5px ${FONT}`;
+  ctx.fillText('PHASE / DATES',LEFT_PAD+10,headerY+HEADER_H/2+3);
+  // Chart axis backgrounds
   ctx.fillStyle='#dde3ec';ctx.fillRect(CHART_X,headerY,CHART_W,axisH1);
   ctx.fillStyle='#e8ecf2';ctx.fillRect(CHART_X,headerY+axisH1,CHART_W,axisH2);
 
