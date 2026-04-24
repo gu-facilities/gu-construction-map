@@ -3173,8 +3173,8 @@ function drawGantt(p){
   const spanDays=(new Date(schedule[schedule.length-1].end)-new Date(schedule[0].start))/86400000;
   // day mode: ≤45 days | week mode: ≤120 days | month mode: everything longer
   const tickMode=spanDays<=45?'day':spanDays<=120?'week':'month';
-  const DAY_W=tickMode==='day'?Math.min(Math.max(Math.round(900/totalDays),10),32):tickMode==='week'?Math.min(Math.max(Math.round(900/totalDays),5),16):Math.min(Math.max(Math.round(960/totalDays),6),32);
-  const CHART_W=Math.max(960,totalDays*DAY_W);
+  const DAY_W=tickMode==='day'?Math.min(Math.max(Math.round(700/totalDays),8),24):tickMode==='week'?Math.min(Math.max(Math.round(600/totalDays),4),12):Math.min(Math.max(Math.round(500/totalDays),4),18);
+  const CHART_W=Math.max(700,totalDays*DAY_W);
   const CANVAS_W=LEFT_PAD+LABEL_W+CHART_W+RIGHT_PAD;
   const CANVAS_H=TOP_PAD+HEADER_H+allRows.length*(ROW_H+ROW_GAP)+ROW_GAP+BOTTOM_PAD;
   const CHART_X=LEFT_PAD+LABEL_W;
@@ -3213,7 +3213,7 @@ function drawGantt(p){
   ctx.strokeStyle='#b8c2d4';ctx.lineWidth=1;ctx.setLineDash([]);
   ctx.strokeRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
   // "PHASE / DATES" text centered in header
-  ctx.fillStyle='#445';ctx.font=`700 10px ${FONT}`;
+  ctx.fillStyle='#041E42';ctx.font=`900 11px ${FONT}`;
   ctx.fillText('PHASE / DATES',LEFT_PAD+10,headerY+HEADER_H/2+4);
   // Chart axis backgrounds
   ctx.fillStyle='#dde3ec';ctx.fillRect(CHART_X,headerY,CHART_W,axisH1);
@@ -3281,11 +3281,11 @@ function drawGantt(p){
 
       if(yr!==lastYear){
         // Bold year divider line spanning full height
-        ctx.strokeStyle='#6a7a8a';ctx.lineWidth=2;ctx.setLineDash([]);
+        ctx.strokeStyle='#4a5a6a';ctx.lineWidth=2.5;ctx.setLineDash([]);
         ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();
-        // Year label — large and prominent
-        ctx.fillStyle='#1a2a3a';ctx.font=`700 12px ${FONT}`;
-        ctx.fillText(String(yr),x+4,headerY+axisH1-5);
+        // Year label — large and very prominent
+        ctx.fillStyle='#041E42';ctx.font=`900 16px ${FONT}`;
+        ctx.fillText(String(yr),x+5,headerY+axisH1-3);
         lastYear=yr; moCount=0;
       } else {
         // Regular month grid line
@@ -3300,8 +3300,8 @@ function drawGantt(p){
 
       // Only label month if wide enough AND on the right frequency
       if(monthW>=18&&moCount%labelEvery===0){
-        ctx.fillStyle='#334';
-        ctx.font=`${monthW>=40?'600':'500'} ${monthW>=40?11:9}px ${FONT}`;
+        ctx.fillStyle='#223';
+        ctx.font=`700 ${monthW>=40?12:10}px ${FONT}`;
         ctx.textAlign='center';
         ctx.fillText(MO[mo],x+monthW/2,headerY+axisH1+axisH2-8);
         ctx.textAlign='left';
