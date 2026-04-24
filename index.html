@@ -3289,7 +3289,7 @@ function drawGantt(p){
 
   const DPR=2,FONT='Source Sans 3, Arial, sans-serif';
   const LABEL_W=175,LEFT_PAD=28,RIGHT_PAD=56;
-  const TOP_PAD=80,HEADER_H=52,ROW_H=52,ROW_GAP=6,BOTTOM_PAD=80,RADIUS=5;
+  const TOP_PAD=110,HEADER_H=52,ROW_H=52,ROW_GAP=6,BOTTOM_PAD=90,RADIUS=5;
 
   let minDate=parseD(allRows[0].start),maxDate=parseD(allRows[0].end);
   allRows.forEach(r=>{const s=parseD(r.start),e=parseD(r.end);if(s<minDate)minDate=s;if(e>maxDate)maxDate=e;});
@@ -3328,24 +3328,24 @@ function drawGantt(p){
   // Title header
   ctx.fillStyle='#041E42';ctx.fillRect(0,0,CANVAS_W,TOP_PAD-4);
   ctx.fillStyle='#C9A96E';ctx.fillRect(LEFT_PAD,14,4,TOP_PAD-26);
-  ctx.fillStyle='#ffffff';ctx.font=`700 20px ${FONT}`;ctx.fillText(p.name,LEFT_PAD+14,34);
+  ctx.fillStyle='#ffffff';ctx.font=`700 34px ${FONT}`;ctx.fillText(p.name,LEFT_PAD+14,42);
   const sub=[p.type,p.manager,PHASES[p.phase]?.label].filter(Boolean).join('  ·  ');
-  ctx.fillStyle='rgba(201,169,110,0.85)';ctx.font=`400 11px ${FONT}`;ctx.fillText(sub,LEFT_PAD+14,54);
+  ctx.fillStyle='rgba(201,169,110,0.85)';ctx.font=`400 18px ${FONT}`;ctx.fillText(sub,LEFT_PAD+14,68);
   const dRange=fmtShort(schedule[0].start)+' — '+fmtShort(schedule[schedule.length-1].end);
-  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font=`400 10px ${FONT}`;
-  ctx.textAlign='right';ctx.fillText(dRange,CANVAS_W-RIGHT_PAD,34);ctx.textAlign='left';
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font=`400 16px ${FONT}`;
+  ctx.textAlign='right';ctx.fillText(dRange,CANVAS_W-RIGHT_PAD,42);ctx.textAlign='left';
 
   // Axis header (2 rows: top=month/year label, bottom=day/week/month ticks)
   const headerY=TOP_PAD;
-  const axisH1=22,axisH2=30;
+  const axisH1=32,axisH2=32;
   // Label column header — clean single box matching full header height
   ctx.fillStyle='#e4e8f0';ctx.fillRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
   // Clean border around label header
   ctx.strokeStyle='#b8c2d4';ctx.lineWidth=1;ctx.setLineDash([]);
   ctx.strokeRect(LEFT_PAD,headerY,LABEL_W,HEADER_H);
   // "PHASE / DATES" text centered in header
-  ctx.fillStyle='#041E42';ctx.font=`900 11px ${FONT}`;
-  ctx.fillText('PHASE / DATES',LEFT_PAD+10,headerY+HEADER_H/2+4);
+  ctx.fillStyle='#041E42';ctx.font=`900 16px ${FONT}`;
+  ctx.fillText('PHASE / DATES',LEFT_PAD+10,headerY+HEADER_H/2+6);
   // Chart axis backgrounds
   ctx.fillStyle='#dde3ec';ctx.fillRect(CHART_X,headerY,CHART_W,axisH1);
   ctx.fillStyle='#e8ecf2';ctx.fillRect(CHART_X,headerY+axisH1,CHART_W,axisH2);
@@ -3415,8 +3415,8 @@ function drawGantt(p){
         ctx.strokeStyle='#4a5a6a';ctx.lineWidth=2.5;ctx.setLineDash([]);
         ctx.beginPath();ctx.moveTo(x,headerY);ctx.lineTo(x,CANVAS_H-BOTTOM_PAD);ctx.stroke();
         // Year label — large and very prominent
-        ctx.fillStyle='#041E42';ctx.font=`900 16px ${FONT}`;
-        ctx.fillText(String(yr),x+5,headerY+axisH1-3);
+        ctx.fillStyle='#041E42';ctx.font=`900 26px ${FONT}`;
+        ctx.fillText(String(yr),x+5,headerY+axisH1-2);
         lastYear=yr; moCount=0;
       } else {
         // Regular month grid line
@@ -3432,9 +3432,9 @@ function drawGantt(p){
       // Only label month if wide enough AND on the right frequency
       if(monthW>=18&&moCount%labelEvery===0){
         ctx.fillStyle='#223';
-        ctx.font=`700 ${monthW>=40?12:10}px ${FONT}`;
+        ctx.font=`700 ${monthW>=40?18:14}px ${FONT}`;
         ctx.textAlign='center';
-        ctx.fillText(MO[mo],x+monthW/2,headerY+axisH1+axisH2-8);
+        ctx.fillText(MO[mo],x+monthW/2,headerY+axisH1+axisH2-10);
         ctx.textAlign='left';
       }
       moCount++;
