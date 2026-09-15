@@ -209,33 +209,47 @@ function doGet(e) {
     }
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return makeResponse({projects:[]});
+    // Build column index from actual header row
+    var headers = data[0];
+    var hi = {};
+    headers.forEach(function(h,i){ if(h) hi[String(h).trim()]=i; });
     var projects = [];
     for (var i=1; i<data.length; i++) {
       var row = data[i];
-      if (!row[C['ID']-1]) continue;
+      if (!row[hi['ID']]) continue;
+      var sched = safeParseJSON(hi['Phase Schedule (JSON)']!==undefined?row[hi['Phase Schedule (JSON)']]:'[]',[]);
+      // Derive start/end from phase schedule if available
+      var start = sched.length ? sched[0].start : (hi['Start']!==undefined?row[hi['Start']]||'':'');
+      var end   = sched.length ? sched[sched.length-1].end : (hi['End']!==undefined?row[hi['End']]||'':'');
       projects.push({
-        id:            String(row[C['ID']-1]),
-        name:          row[C['Name']-1]                  || '',
-        manager:       row[C['Project Manager']-1]       || '',
-        campus:        (row[C['Campus']-1]||'hilltop').toLowerCase(),
-        projType:      row[C['Project Type']-1]          || '',
-        charterStatus: row[C['Charter Status']-1]        || '',
-        type:          row[C['Project Category']-1]      || '',
-        phase:         normalizePhase(row[C['Current Phase']-1]),
-        start:         row[C['Start']-1]                 || '',
-        end:           row[C['End']-1]                   || '',
-        desc:          row[C['Description']-1]           || '',
-        shapes:        safeParseJSON(row[C['Shapes (JSON)']-1], []),
-        stagingYN:     row[C['Staging Area?']-1]         === 'yes',
-        roadYN:        row[C['Road Closure?']-1]         === 'yes',
-        phaseSchedule: safeParseJSON(row[C['Phase Schedule (JSON)']-1], []),
-        createdAt:     row[C['Created At']-1]            || '',
-        updatedAt:     row[C['Updated At']-1]            || '',
+        id:               String(row[hi['ID']]),
+        name:             hi['Name']!==undefined             ? row[hi['Name']]||''             : '',
+        manager:          hi['Project Manager']!==undefined  ? row[hi['Project Manager']]||''  : '',
+        campus:           (String(hi['Campus']!==undefined   ? row[hi['Campus']]||'hilltop'    : 'hilltop')).toLowerCase(),
+        projType:         hi['Project Type']!==undefined     ? row[hi['Project Type']]||''     : '',
+        charterStatus:    hi['Charter Status']!==undefined   ? row[hi['Charter Status']]||''   : '',
+        type:             hi['Project Category']!==undefined ? row[hi['Project Category']]||'' : '',
+        phase:            normalizePhase(hi['Current Phase']!==undefined?row[hi['Current Phase']]:''),
+        start:            start,
+        end:              end,
+        desc:             hi['Description']!==undefined      ? row[hi['Description']]||''      : '',
+        activitySummary:  hi['Activity Summary']!==undefined ? row[hi['Activity Summary']]||'' : '',
+        activityForecast: hi['Activity Forecast']!==undefined? row[hi['Activity Forecast']]||'': '',
+        onHold:           hi['On Hold']!==undefined          ? row[hi['On Hold']]==='yes'      : false,
+        occupancyDate:    hi['Occupancy Date']!==undefined   ? row[hi['Occupancy Date']]||''   : '',
+        substCompletionDate: hi['Est. Substantial Completion']!==undefined ? row[hi['Est. Substantial Completion']]||'' : '',
+        customTimeframes: safeParseJSON(hi['Custom Timeframes (JSON)']!==undefined?row[hi['Custom Timeframes (JSON)']]:'[]',[]),
+        shapes:           safeParseJSON(hi['Shapes (JSON)']!==undefined?row[hi['Shapes (JSON)']]:'[]',[]),
+        stagingYN:        hi['Staging Area?']!==undefined    ? row[hi['Staging Area?']]==='yes': false,
+        roadYN:           hi['Road Closure?']!==undefined    ? row[hi['Road Closure?']]==='yes': false,
+        phaseSchedule:    sched,
+        createdAt:        hi['Created At']!==undefined       ? row[hi['Created At']]||''       : '',
+        updatedAt:        hi['Updated At']!==undefined       ? row[hi['Updated At']]||''       : '',
       });
     }
     return makeResponse({projects:projects});
   } catch(err) {
-    return makeResponse({error:err.message});
+    return makeResponse({error:err.message+' '+err.stack});
   }
 }
 
