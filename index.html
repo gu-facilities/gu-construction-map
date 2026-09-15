@@ -766,22 +766,8 @@ select.yr-sel{padding:3px 6px;font-family:'Source Sans 3',sans-serif;font-size:.
 </div>
 
 <script>
-const SHEET_API = 'https://script.google.com/macros/s/AKfycby8uoqojnU_6btlWkdmkw_I6rB6bWNIjo0e519nmZv4zm3Be5vzqraVhXqO40Htiy2G/exec';
-async function apiGet(){
-  return new Promise((resolve)=>{
-    const cb='_jsonp_'+Date.now();
-    window[cb]=(data)=>{
-      delete window[cb];
-      document.getElementById('jsonp-script')?.remove();
-      resolve(data.projects||null);
-    };
-    const s=document.createElement('script');
-    s.id='jsonp-script';
-    s.src=SHEET_API+'?callback='+cb;
-    s.onerror=()=>resolve(null);
-    document.head.appendChild(s);
-  });
-}
+const SHEET_API = 'https://script.google.com/macros/s/AKfycbymtbDaCAMSlgqXbeJK7Aqgn78obtghsYG6cQok-tcCedpndOKDHqo0TgrSN47xnRCQ/exec';
+async function apiGet(){try{const r=await fetch(SHEET_API);const d=await r.json();return d.projects||null;}catch(e){return null;}}
 async function apiPost(body){try{const r=await fetch(SHEET_API+'?payload='+encodeURIComponent(JSON.stringify(body)));return await r.json();}catch(e){return null;}}
 
 // ── DATE NORMALIZATION ───────────────────────────────────────────────
